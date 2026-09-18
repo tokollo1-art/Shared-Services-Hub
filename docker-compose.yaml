@@ -1,0 +1,49 @@
+services:
+  # ============================================
+  # POSTGRESQL DATABASE
+  # Stores all SSH data: users, tasks, payments,
+  # experience records, and audit logs
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: ssh-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ssh
+      POSTGRES_USER: ssh_user
+      POSTGRES_PASSWORD: ssh_password
+    command: postgres -c max_connections=200
+    volumes:
+      - ssh-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ssh_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # REDIS CACHE
+  # Handles: JWT sessions, real-time matching,
+  # and caching for fast task feeds
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: ssh-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ssh-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ============================================
+# PERSISTENT VOLUMES
+# Keep data safe even when containers stop
+# ============================================
+volumes:
+  ssh-postgres-data:
+  ssh-redis-data:
