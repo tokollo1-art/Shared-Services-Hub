@@ -62,33 +62,33 @@
 		{#if interactive}
 			<button
 				type="button"
-				class="transition-transform hover:scale-125 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded p-0.5"
+				class="transition-transform hover:scale-110 focus:outline-none focus:ring-1 focus:ring-[#1446A0] p-0.5"
 				onclick={() => handleStarClick(starIndex)}
 				onmouseenter={() => handleMouseEnter(starIndex)}
 				title={`${starIndex} star${starIndex > 1 ? 's' : ''}`}
 				aria-label={`${starIndex} stars`}
 			>
 				{#if isFilled}
-					<span class="text-amber-400 drop-shadow-xs">★</span>
+					<span style="color: #E8B830;">★</span>
 				{:else}
-					<span class="text-slate-300">☆</span>
+					<span style="color: #D1D5DB;">☆</span>
 				{/if}
 			</button>
 		{:else}
 			<span class="transition-colors">
 				{#if isFilled}
-					<span class="text-amber-400 drop-shadow-xs">★</span>
+					<span style="color: #E8B830;">★</span>
 				{:else if isHalf}
-					<span class="text-amber-400">★</span>
+					<span style="color: #E8B830;">★</span>
 				{:else}
-					<span class="text-slate-300">☆</span>
+					<span style="color: #D1D5DB;">☆</span>
 				{/if}
 			</span>
 		{/if}
 	{/each}
 
 	{#if rating > 0 && !interactive}
-		<span class="ml-1.5 font-semibold text-slate-700 {size === 'sm' ? 'text-xs' : 'text-sm'}">
+		<span class="ml-1.5 font-mono font-semibold text-[#0D1B3E] {size === 'sm' ? 'text-xs' : 'text-sm'}">
 			{Number(rating).toFixed(1)}
 		</span>
 	{/if}

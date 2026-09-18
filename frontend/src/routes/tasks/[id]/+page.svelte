@@ -44,7 +44,6 @@
 		}
 	}
 
-	// Youth Action: Mark Complete
 	async function handleCompleteTask() {
 		if (!task) return;
 		actionLoading = true;
@@ -59,7 +58,6 @@
 		}
 	}
 
-	// Youth Action: Apply / Self-Assign (when OPEN)
 	async function handleApplyTask() {
 		if (!task || !user) return;
 		actionLoading = true;
@@ -74,7 +72,6 @@
 		}
 	}
 
-	// SME Action: Assign
 	async function handleAssignSubmit() {
 		if (!task || !youthIdToAssign) return;
 		actionLoading = true;
@@ -90,7 +87,6 @@
 		}
 	}
 
-	// SME Action: Verify
 	async function handleVerifySubmit() {
 		if (!task) return;
 		actionLoading = true;
@@ -121,12 +117,9 @@
 		<div class="mb-6">
 			<a
 				href="/tasks"
-				class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors"
+				class="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-[#6A84AC] hover:text-[#1446A0] transition-colors"
 			>
-				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-				</svg>
-				<span>Back to Tasks</span>
+				<span>← Back to Task Directory</span>
 			</a>
 		</div>
 
@@ -135,90 +128,87 @@
 
 		{#if loading}
 			<div class="space-y-6">
-				<div class="h-40 rounded-3xl bg-slate-200/60 animate-pulse"></div>
-				<div class="h-64 rounded-3xl bg-slate-200/60 animate-pulse"></div>
+				<div class="h-40 border border-[#C8D4E8] bg-white animate-pulse"></div>
+				<div class="h-64 border border-[#C8D4E8] bg-white animate-pulse"></div>
 			</div>
 		{:else if task}
 			<div class="space-y-8">
-				<!-- Main Card -->
-				<div class="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+				<!-- Main Card (Sharp, Cape Cobalt) -->
+				<div class="border border-[#C8D4E8] bg-white p-8 shadow-xs border-t-4 border-t-[#1446A0]">
 					<!-- Top Meta -->
 					<div class="flex items-center justify-between gap-4 mb-4 flex-wrap">
 						<div class="flex items-center gap-2">
-							<span class="rounded-lg bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 ring-1 ring-inset ring-indigo-700/10">
+							<span class="bg-[#EFF4FF] border border-[#C8D4E8] px-2.5 py-0.5 text-xs font-mono font-bold text-[#1446A0]">
 								{task.category}
 							</span>
 							<StatusBadge status={task.status} size="md" />
 						</div>
 
-						<span class="text-xs text-slate-400 font-medium">
+						<span class="font-mono text-xs text-[#6A84AC]">
 							Posted {formatDate(task.createdAt, true)}
 						</span>
 					</div>
 
-					<!-- Title -->
-					<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight leading-snug">
+					<!-- Title (Serif Display) -->
+					<h1 class="font-serif text-3xl sm:text-4xl text-[#0D1B3E] font-normal leading-snug">
 						{task.title}
 					</h1>
 
 					<!-- SME Issuer -->
-					<div class="mt-4 flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100 max-w-md">
-						<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700 font-bold">
-							<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-							</svg>
-						</div>
+					<div class="mt-4 flex items-center gap-3 p-3 bg-[#F8F9FC] border border-[#C8D4E8] max-w-md">
 						<div>
-							<div class="text-xs text-slate-400 font-semibold uppercase">Posting SME Partner</div>
-							<div class="text-sm font-bold text-slate-900">{task.smeBusinessName || 'Verified SME Partner'}</div>
+							<div class="font-mono text-[10px] uppercase tracking-wider text-[#6A84AC]">Issuer / SME Partner</div>
+							<div class="font-sans text-sm font-bold text-[#0D1B3E]">{task.smeBusinessName || 'Verified SME Partner'}</div>
 						</div>
 					</div>
 
-					<!-- Key Parameters Grid -->
-					<div class="mt-8 pt-6 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-4">
-						<div class="rounded-xl bg-slate-50 p-4 border border-slate-100">
-							<div class="text-xs text-slate-400 font-semibold uppercase">Budget (Corporate Funded)</div>
-							<div class="text-xl font-black text-indigo-600 mt-1">{formatCurrency(task.budget)}</div>
-							<span class="text-[11px] text-emerald-600 font-medium">Guaranteed direct pay</span>
+					<!-- Key Parameters Grid (Sharp Boxes) -->
+					<div class="mt-8 pt-6 border-t border-[#C8D4E8] grid grid-cols-2 sm:grid-cols-4 gap-4">
+						<div class="border border-[#C8D4E8] bg-[#F8F9FC] p-4">
+							<div class="font-mono text-[10px] font-bold uppercase tracking-wider text-[#6A84AC]">Corporate Reserve</div>
+							<div class="font-mono text-xl font-bold text-[#1446A0] mt-1">{formatCurrency(task.budget)}</div>
+							<span class="font-mono text-[10px] text-[#1A8A55] uppercase">Direct Payout</span>
 						</div>
 
-						<div class="rounded-xl bg-slate-50 p-4 border border-slate-100">
-							<div class="text-xs text-slate-400 font-semibold uppercase">Expected Duration</div>
-							<div class="text-xl font-bold text-slate-800 mt-1">{formatDuration(task.durationDays)}</div>
-							<span class="text-[11px] text-slate-500">Structured delivery</span>
+						<div class="border border-[#C8D4E8] bg-[#F8F9FC] p-4">
+							<div class="font-mono text-[10px] font-bold uppercase tracking-wider text-[#6A84AC]">Duration</div>
+							<div class="font-mono text-xl font-semibold text-[#0D1B3E] mt-1">{formatDuration(task.durationDays)}</div>
+							<span class="font-mono text-[10px] text-[#6A84AC] uppercase">Milestone Track</span>
 						</div>
 
-						<div class="rounded-xl bg-slate-50 p-4 border border-slate-100">
-							<div class="text-xs text-slate-400 font-semibold uppercase">Assigned Talent</div>
-							<div class="text-sm font-bold text-slate-800 mt-1 truncate">
+						<div class="border border-[#C8D4E8] bg-[#F8F9FC] p-4">
+							<div class="font-mono text-[10px] font-bold uppercase tracking-wider text-[#6A84AC]">Assigned Candidate</div>
+							<div class="font-sans text-sm font-bold text-[#0D1B3E] mt-1 truncate">
 								{task.assignedToName || 'Unassigned'}
 							</div>
-							<span class="text-[11px] text-slate-500">
-								{task.assignedToId ? `ID #${task.assignedToId}` : 'Available to claim'}
+							<span class="font-mono text-[10px] text-[#6A84AC] uppercase">
+								{task.assignedToId ? `ID #${task.assignedToId}` : 'Open to claim'}
 							</span>
 						</div>
 
-						<div class="rounded-xl bg-slate-50 p-4 border border-slate-100">
-							<div class="text-xs text-slate-400 font-semibold uppercase">Stipend Status</div>
-							<div class="text-sm font-bold text-emerald-700 mt-1">
-								{task.isPaid ? '✓ Paid Task' : 'Volunteer'}
+						<div class="border border-[#C8D4E8] bg-[#F8F9FC] p-4">
+							<div class="font-mono text-[10px] font-bold uppercase tracking-wider text-[#6A84AC]">Compensation</div>
+							<div class="font-mono text-sm font-bold text-[#1A8A55] mt-1">
+								{task.isPaid ? 'PAID TASK' : 'VOLUNTEER'}
 							</div>
-							<span class="text-[11px] text-slate-500">Sponsor backed</span>
+							<span class="font-mono text-[10px] text-[#6A84AC] uppercase">Escrow Locked</span>
 						</div>
 					</div>
 
 					<!-- Task Description Body -->
 					<div class="mt-8">
-						<h3 class="text-sm font-bold uppercase tracking-wider text-slate-700 mb-3">Deliverables & Requirements</h3>
-						<div class="prose prose-slate max-w-none text-slate-700 text-sm leading-relaxed whitespace-pre-line rounded-2xl bg-slate-50/50 p-6 border border-slate-200/60">
+						<h3 class="font-mono text-xs font-bold uppercase tracking-wider text-[#0D1B3E] mb-3">
+							Deliverables &amp; Description
+						</h3>
+						<div class="font-sans text-sm text-[#465A7A] leading-relaxed whitespace-pre-line border border-[#C8D4E8] bg-[#F8F9FC] p-6">
 							{task.description || 'No additional instructions specified by the SME partner.'}
 						</div>
 					</div>
 
 					<!-- Role-Specific Action Bar -->
-					<div class="mt-8 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4">
-						<div class="text-xs text-slate-500">
-							Status: <span class="font-semibold text-slate-900">{task.status}</span>
+					<div class="mt-8 pt-6 border-t border-[#C8D4E8] flex flex-wrap items-center justify-between gap-4">
+						<div class="font-mono text-xs text-[#6A84AC]">
+							Status: <span class="font-bold text-[#0D1B3E]">{task.status}</span>
 						</div>
 
 						<div class="flex items-center gap-3">
@@ -228,7 +218,7 @@
 									<button
 										type="button"
 										disabled={actionLoading}
-										class="rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
+										class="cape-btn-primary px-6 py-2.5 text-xs font-mono uppercase tracking-wider disabled:opacity-50"
 										onclick={handleApplyTask}
 									>
 										{actionLoading ? 'Claiming...' : 'Claim / Apply for Task'}
@@ -237,21 +227,18 @@
 									<button
 										type="button"
 										disabled={actionLoading}
-										class="rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-500/20 hover:bg-emerald-700 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+										class="bg-[#1A8A55] text-white px-6 py-2.5 text-xs font-mono uppercase tracking-wider font-bold hover:bg-[#146e43] transition-colors disabled:opacity-50"
 										onclick={handleCompleteTask}
 									>
-										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-										</svg>
-										<span>{actionLoading ? 'Marking Complete...' : 'Mark as Completed'}</span>
+										{actionLoading ? 'Submitting...' : 'Mark as Completed'}
 									</button>
 								{:else if task.status === 'COMPLETED'}
-									<span class="rounded-xl bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800 border border-amber-200">
-										Completed! Awaiting SME Verification
+									<span class="border border-[#C49420] bg-[#FFF8E6] px-4 py-2 text-xs font-mono font-bold text-[#C49420] uppercase">
+										Awaiting SME Evaluation
 									</span>
 								{:else if task.status === 'VERIFIED'}
-									<span class="rounded-xl bg-purple-50 px-4 py-2 text-xs font-bold text-purple-700 border border-purple-200">
-										✓ Verified & Logged in Experience Ledger
+									<span class="border border-[#7C3FE4] bg-[#F5EEFF] px-4 py-2 text-xs font-mono font-bold text-[#7C3FE4] uppercase">
+										✓ Verified in Experience Ledger
 									</span>
 								{/if}
 							{/if}
@@ -261,28 +248,25 @@
 								{#if task.status === 'OPEN'}
 									<button
 										type="button"
-										class="rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 transition-colors"
+										class="cape-btn-primary px-5 py-2.5 text-xs font-mono uppercase tracking-wider"
 										onclick={() => {
 											youthIdToAssign = '1';
 											assignModalOpen = true;
 										}}
 									>
-										Assign to Youth Candidate
+										Assign to Candidate
 									</button>
 								{:else if task.status === 'IN_PROGRESS' || task.status === 'COMPLETED'}
 									<button
 										type="button"
-										class="rounded-xl bg-purple-600 px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-purple-700 transition-colors flex items-center gap-1.5"
+										class="bg-[#7C3FE4] text-white px-5 py-2.5 text-xs font-mono uppercase tracking-wider font-bold hover:bg-[#682ec7] transition-colors"
 										onclick={() => {
 											verifyRating = 5;
 											verifyFeedback = 'Exceptional work delivered with high accuracy.';
 											verifyModalOpen = true;
 										}}
 									>
-										<span>Verify Experience</span>
-										<svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-											<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-										</svg>
+										Verify Experience
 									</button>
 								{/if}
 							{/if}
@@ -294,17 +278,17 @@
 	</div>
 </RoleGuard>
 
-<!-- Modal: Assign Task to Youth -->
+<!-- Modal: Assign Task to Youth (Sharp) -->
 <Modal
 	bind:open={assignModalOpen}
 	title={`Assign Task: ${task?.title || ''}`}
 >
 	<div class="space-y-4">
-		<p class="text-xs text-slate-600 leading-relaxed">
+		<p class="text-xs text-[#465A7A] leading-relaxed font-sans">
 			Specify the Youth Candidate ID to assign this task.
 		</p>
 		<div>
-			<label for="modalYouthId" class="block text-xs font-bold uppercase tracking-wider text-slate-700">
+			<label for="modalYouthId" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
 				Candidate ID *
 			</label>
 			<input
@@ -313,8 +297,8 @@
 				min="1"
 				required
 				bind:value={youthIdToAssign}
-				placeholder="e.g. 1"
-				class="mt-1 block w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+				placeholder="1"
+				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
 			/>
 		</div>
 	</div>
@@ -322,7 +306,7 @@
 	{#snippet footer()}
 		<button
 			type="button"
-			class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+			class="cape-btn-secondary px-4 py-2 text-xs font-mono uppercase tracking-wider"
 			onclick={() => (assignModalOpen = false)}
 		>
 			Cancel
@@ -330,7 +314,7 @@
 		<button
 			type="button"
 			disabled={actionLoading}
-			class="rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50"
+			class="cape-btn-primary px-5 py-2 text-xs font-mono uppercase tracking-widest disabled:opacity-50"
 			onclick={handleAssignSubmit}
 		>
 			{actionLoading ? 'Assigning...' : 'Confirm Assignment'}
@@ -338,33 +322,33 @@
 	{/snippet}
 </Modal>
 
-<!-- Modal: Verify Experience -->
+<!-- Modal: Verify Experience (Sharp) -->
 <Modal
 	bind:open={verifyModalOpen}
 	title={`Verify Experience: ${task?.title || ''}`}
 >
 	<div class="space-y-4">
-		<p class="text-xs text-slate-600 leading-relaxed">
+		<p class="text-xs text-[#465A7A] leading-relaxed font-sans">
 			Your rating and feedback will be added to the permanent Experience Ledger and release corporate wage payment.
 		</p>
 
 		<div>
-			<div class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+			<div class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E] mb-1.5">
 				Performance Rating (0 to 5 Stars) *
 			</div>
 			<StarRating bind:rating={verifyRating} interactive={true} size="lg" />
 		</div>
 
 		<div>
-			<label for="detailFeedback" class="block text-xs font-bold uppercase tracking-wider text-slate-700">
-				Written Feedback & Capability Assessment *
+			<label for="detailFeedback" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
+				Written Feedback &amp; Capability Assessment *
 			</label>
 			<textarea
 				id="detailFeedback"
 				rows="3"
 				bind:value={verifyFeedback}
 				placeholder="Provide feedback on communication, turnaround time, quality..."
-				class="mt-1 block w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/20"
+				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
 			></textarea>
 		</div>
 	</div>
@@ -372,7 +356,7 @@
 	{#snippet footer()}
 		<button
 			type="button"
-			class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+			class="cape-btn-secondary px-4 py-2 text-xs font-mono uppercase tracking-wider"
 			onclick={() => (verifyModalOpen = false)}
 		>
 			Cancel
@@ -380,7 +364,7 @@
 		<button
 			type="button"
 			disabled={actionLoading}
-			class="rounded-xl bg-purple-600 px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-purple-700 disabled:opacity-50"
+			class="bg-[#7C3FE4] text-white px-5 py-2 text-xs font-mono uppercase tracking-widest font-bold hover:bg-[#682ec7] disabled:opacity-50"
 			onclick={handleVerifySubmit}
 		>
 			{actionLoading ? 'Verifying...' : 'Sign & Record to Ledger'}

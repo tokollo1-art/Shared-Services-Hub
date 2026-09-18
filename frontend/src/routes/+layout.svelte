@@ -14,7 +14,7 @@
 	const toasts = $derived($toast);
 </script>
 
-<div class="flex min-h-screen flex-col bg-slate-50">
+<div class="flex min-h-screen flex-col bg-[#F8F9FC]">
 	<!-- Navbar -->
 	<Navbar />
 
@@ -23,38 +23,26 @@
 		{@render children()}
 	</main>
 
-	<!-- Global Toast Notifications -->
+	<!-- Global Toast Notifications (Sharp, Editorial) -->
 	<div
-		class="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 max-w-md w-full pointer-events-none px-4 sm:px-0"
+		class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none px-4 sm:px-0"
 		aria-live="polite"
 	>
 		{#each toasts as t (t.id)}
 			<div
-				class="pointer-events-auto flex items-start gap-3 rounded-xl border p-4 shadow-xl backdrop-blur-md transition-all animate-in slide-in-from-bottom-5 duration-200 {t.type === 'success'
-					? 'border-emerald-200 bg-white/95 text-slate-800'
+				class="pointer-events-auto flex items-start gap-3 border bg-white p-4 shadow-xl transition-all animate-in slide-in-from-bottom-3 duration-150 {t.type === 'success'
+					? 'border-l-4 border-l-[#1A8A55] border-[#C8D4E8] text-[#0D1B3E]'
 					: t.type === 'error'
-					? 'border-rose-200 bg-white/95 text-slate-800'
-					: 'border-indigo-200 bg-white/95 text-slate-800'}"
+					? 'border-l-4 border-l-[#C42B2B] border-[#C8D4E8] text-[#0D1B3E]'
+					: 'border-l-4 border-l-[#1446A0] border-[#C8D4E8] text-[#0D1B3E]'}"
 			>
-				<div class="shrink-0 mt-0.5">
+				<div class="shrink-0 mt-0.5 font-mono text-xs font-bold">
 					{#if t.type === 'success'}
-						<div class="rounded-full bg-emerald-100 p-1 text-emerald-600">
-							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-							</svg>
-						</div>
+						<span class="text-[#1A8A55]">[OK]</span>
 					{:else if t.type === 'error'}
-						<div class="rounded-full bg-rose-100 p-1 text-rose-600">
-							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-							</svg>
-						</div>
+						<span class="text-[#C42B2B]">[ERR]</span>
 					{:else}
-						<div class="rounded-full bg-indigo-100 p-1 text-indigo-600">
-							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-							</svg>
-						</div>
+						<span class="text-[#1446A0]">[INFO]</span>
 					{/if}
 				</div>
 
@@ -64,7 +52,7 @@
 
 				<button
 					type="button"
-					class="shrink-0 rounded-md p-1 text-slate-400 hover:text-slate-600"
+					class="shrink-0 p-1 text-[#6A84AC] hover:text-[#0D1B3E]"
 					onclick={() => toast.remove(t.id)}
 					aria-label="Dismiss toast"
 				>
@@ -76,61 +64,61 @@
 		{/each}
 	</div>
 
-	<!-- Footer -->
-	<footer class="border-t border-slate-200 bg-white">
-		<div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-			<div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+	<!-- Footer (Cape Cobalt Surface-Dark #0A1E4A) -->
+	<footer class="border-t border-[#C8D4E8] bg-[#0A1E4A] text-white">
+		<div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+			<div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-10">
 				<div class="md:col-span-2">
-					<div class="flex items-center gap-2.5">
-						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white font-extrabold text-sm">
+					<div class="flex items-center gap-3">
+						<div class="flex h-8 w-8 items-center justify-center bg-[#1446A0] text-white font-mono font-bold text-xs border border-white/20">
 							SSH
 						</div>
-						<span class="text-lg font-bold text-slate-900">Shared Services Hub</span>
+						<span class="font-serif text-xl font-bold tracking-tight text-white">Shared Services Hub</span>
 					</div>
-					<p class="mt-3 text-sm text-slate-600 max-w-md leading-relaxed">
-						Connecting South African youth program alumni to SMEs for paid tasks. Funded by corporate enterprise development budgets, verified on the permanent Experience Ledger.
+					<p class="mt-3.5 text-sm text-[#C8D4E8] max-w-md leading-relaxed font-sans">
+						Connecting South African youth program alumni to SMEs for paid tasks. Funded by corporate enterprise development reserves, verified through an immutable Experience Ledger.
 					</p>
-					<div class="mt-4 flex items-center gap-3 text-xs font-semibold text-slate-500">
-						<span class="flex items-center gap-1">
-							<span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-							B-BBEE Scorecard Compliant
-						</span>
+					<div class="mt-5 flex items-center gap-3 text-xs font-mono text-[#6A84AC]">
+						<span class="text-[#D4831A] font-semibold">B-BBEE Scorecard Aligned</span>
 						<span>•</span>
-						<span>Zero Cost to SMEs</span>
+						<span>R0 Cost to SMEs</span>
 						<span>•</span>
-						<span>100% Guaranteed Wages</span>
+						<span class="text-[#1A8A55] font-semibold">100% Guaranteed Wages</span>
 					</div>
 				</div>
 
 				<div>
-					<h4 class="text-xs font-bold uppercase tracking-wider text-slate-900 mb-3">Platform</h4>
-					<ul class="space-y-2 text-sm text-slate-600">
-						<li><a href="/tasks" class="hover:text-indigo-600 transition-colors">Browse Tasks</a></li>
-						<li><a href="/register" class="hover:text-indigo-600 transition-colors">Join as Youth</a></li>
-						<li><a href="/register" class="hover:text-indigo-600 transition-colors">Register as SME</a></li>
-						<li><a href="/register" class="hover:text-indigo-600 transition-colors">Corporate Sponsorship</a></li>
+					<h4 class="font-mono text-xs font-bold uppercase tracking-widest text-[#D4831A] mb-4">Platform</h4>
+					<ul class="space-y-2.5 text-sm text-[#C8D4E8]">
+						<li><a href="/tasks" class="hover:text-white hover:underline transition-colors">Task Directory</a></li>
+						<li><a href="/register" class="hover:text-white hover:underline transition-colors">Candidate Registration</a></li>
+						<li><a href="/register" class="hover:text-white hover:underline transition-colors">SME Partner Access</a></li>
+						<li><a href="/register" class="hover:text-white hover:underline transition-colors">Corporate Sponsorship</a></li>
 					</ul>
 				</div>
 
 				<div>
-					<h4 class="text-xs font-bold uppercase tracking-wider text-slate-900 mb-3">The SSH Guarantee</h4>
-					<ul class="space-y-2 text-sm text-slate-600">
-						<li class="flex items-center gap-1.5 text-emerald-700 font-medium">
-							<span>✓ Guaranteed Work</span>
+					<h4 class="font-mono text-xs font-bold uppercase tracking-widest text-[#D4831A] mb-4">The SSH Guarantee</h4>
+					<ul class="space-y-2.5 text-sm text-[#C8D4E8]">
+						<li class="flex items-center gap-2">
+							<span class="text-[#1A8A55] font-mono">✓</span>
+							<span>Guaranteed Work Allocation</span>
 						</li>
-						<li class="flex items-center gap-1.5 text-emerald-700 font-medium">
-							<span>✓ Guaranteed Direct Pay</span>
+						<li class="flex items-center gap-2">
+							<span class="text-[#1A8A55] font-mono">✓</span>
+							<span>Direct Corporate Payout</span>
 						</li>
-						<li class="flex items-center gap-1.5 text-emerald-700 font-medium">
-							<span>✓ Verifiable Experience</span>
+						<li class="flex items-center gap-2">
+							<span class="text-[#1A8A55] font-mono">✓</span>
+							<span>Portable Verified Ledger</span>
 						</li>
 					</ul>
 				</div>
 			</div>
 
-			<div class="border-t border-slate-100 pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-				<p>© 2026 Shared Services Hub (Pty) Ltd. Republic of South Africa. All rights reserved.</p>
-				<p class="text-slate-400">Addressing youth unemployment with sustainable market linkages.</p>
+			<div class="border-t border-[#1C3565] pt-8 flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-[#6A84AC] gap-4">
+				<p>© 2026 Shared Services Hub (Pty) Ltd. Republic of South Africa.</p>
+				<p>Palette: Cape Cobalt | Typography: DM Serif &amp; Inter</p>
 			</div>
 		</div>
 	</footer>

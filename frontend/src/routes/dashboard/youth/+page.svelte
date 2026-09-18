@@ -27,15 +27,13 @@
 		return (sum / rated.length).toFixed(1);
 	});
 
-	// Total earned from verified or completed tasks
 	const totalEarned = $derived.by(() => {
-		return experiences.length * 1100; // estimated/average earnings
+		return experiences.length * 1100;
 	});
 
 	async function loadDashboardData() {
 		errorMessage = null;
 
-		// 1. Fetch open tasks
 		loadingTasks = true;
 		try {
 			const res = await api.tasks.list();
@@ -47,7 +45,6 @@
 			loadingTasks = false;
 		}
 
-		// 2. Fetch experience ledger for this youth
 		const youthId = user?.id || 1;
 		loadingExp = true;
 		try {
@@ -71,59 +68,58 @@
 
 <RoleGuard allowedRoles={['YOUTH', 'ADMIN']}>
 	<div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-		<!-- Header with Welcome & Alumni Badge -->
-		<div class="rounded-3xl border border-indigo-100 bg-gradient-to-r from-indigo-900 via-indigo-800 to-purple-900 p-8 text-white shadow-xl shadow-indigo-950/10 mb-8 relative overflow-hidden">
-			<div class="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+		<!-- Header (Cape Cobalt Surface-Dark #0A1E4A) -->
+		<div class="border border-[#C8D4E8] bg-[#0A1E4A] p-8 text-white shadow-md mb-8">
+			<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 				<div>
-					<div class="flex items-center gap-2.5 flex-wrap">
-						<h1 class="text-3xl font-extrabold tracking-tight">
-							Welcome back, {user?.name || 'Candidate'}
+					<div class="flex items-center gap-3 flex-wrap">
+						<h1 class="font-serif text-3xl sm:text-4xl font-normal text-white">
+							Welcome, {user?.name || 'Candidate'}
 						</h1>
 						{#if isAlumni}
-							<span class="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300 border border-emerald-400/30">
-								<span>★ Permanent Alumni</span>
+							<span class="inline-block bg-[#1A8A55] text-white px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest">
+								PERMANENT ALUMNI
 							</span>
 						{:else}
-							<span class="inline-flex items-center gap-1 rounded-full bg-indigo-500/30 px-3 py-1 text-xs font-semibold text-indigo-200 border border-indigo-400/30">
-								<span>● Active Candidate</span>
+							<span class="inline-block bg-[#1446A0] text-white px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest border border-white/20">
+								ACTIVE CANDIDATE
 							</span>
 						{/if}
 					</div>
-					<p class="mt-2 text-sm text-indigo-200 max-w-xl">
-						Complete verified SME tasks to build your Experience Ledger and earn guaranteed corporate-funded income.
+					<p class="mt-2 text-sm text-[#C8D4E8] max-w-xl font-light font-sans">
+						Complete verified tasks for local SMEs to expand your Experience Ledger and earn corporate-funded wages.
 					</p>
 				</div>
 
 				<div class="flex items-center gap-3">
 					<a
 						href="/tasks"
-						class="rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-indigo-900 shadow-xs hover:bg-indigo-50 transition-all text-center"
+						class="bg-white text-[#0D1B3E] px-4 py-2.5 font-mono text-xs font-bold uppercase tracking-wider hover:bg-[#EFF4FF] transition-colors"
 					>
 						Browse All Tasks
 					</a>
 				</div>
 			</div>
 
-			<!-- Stat Counters -->
-			<div class="mt-8 pt-6 border-t border-indigo-700/50 grid grid-cols-2 sm:grid-cols-4 gap-4">
+			<!-- Stat Counters (Sharp, Editorial) -->
+			<div class="mt-8 pt-6 border-t border-[#1C3565] grid grid-cols-2 sm:grid-cols-4 gap-4">
 				<div>
-					<div class="text-xs text-indigo-200 font-medium">Available Tasks</div>
-					<div class="text-2xl font-black mt-0.5">{tasks.filter(t => t.status === 'OPEN').length}</div>
+					<div class="font-mono text-[11px] font-bold uppercase tracking-wider text-[#6A84AC]">Available Tasks</div>
+					<div class="font-mono text-2xl font-bold mt-1 text-white">{tasks.filter(t => t.status === 'OPEN').length}</div>
 				</div>
 				<div>
-					<div class="text-xs text-indigo-200 font-medium">Verified Records</div>
-					<div class="text-2xl font-black mt-0.5">{verifiedExperiences.length}</div>
+					<div class="font-mono text-[11px] font-bold uppercase tracking-wider text-[#6A84AC]">Verified Records</div>
+					<div class="font-mono text-2xl font-bold mt-1 text-[#7C3FE4]">{verifiedExperiences.length}</div>
 				</div>
 				<div>
-					<div class="text-xs text-indigo-200 font-medium">Average Rating</div>
-					<div class="text-2xl font-black mt-0.5 flex items-center gap-1 text-amber-300">
-						<span>★</span>
-						<span>{averageRating}</span>
+					<div class="font-mono text-[11px] font-bold uppercase tracking-wider text-[#6A84AC]">Average Rating</div>
+					<div class="font-mono text-2xl font-bold mt-1 text-[#E8B830]">
+						★ {averageRating}
 					</div>
 				</div>
 				<div>
-					<div class="text-xs text-indigo-200 font-medium">Guaranteed Paid</div>
-					<div class="text-2xl font-black mt-0.5 text-emerald-300">{formatCurrency(totalEarned)}</div>
+					<div class="font-mono text-[11px] font-bold uppercase tracking-wider text-[#6A84AC]">Total Paid</div>
+					<div class="font-mono text-2xl font-bold mt-1 text-[#1A8A55]">{formatCurrency(totalEarned)}</div>
 				</div>
 			</div>
 		</div>
@@ -132,14 +128,14 @@
 		<ApiError message={errorMessage} onretry={loadDashboardData} />
 
 		<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-			<!-- Left Column (2 Cols): Open Tasks Available to Apply -->
+			<!-- Left Column (2 Cols): Open Tasks -->
 			<div class="lg:col-span-2 space-y-6">
-				<div class="flex items-center justify-between">
+				<div class="flex items-center justify-between border-b border-[#C8D4E8] pb-3">
 					<div>
-						<h2 class="text-xl font-bold text-slate-900">Open SME Tasks</h2>
-						<p class="text-xs text-slate-500">Tasks ready for execution with guaranteed corporate funding.</p>
+						<h2 class="font-serif text-2xl text-[#0D1B3E]">Open Tasks</h2>
+						<p class="text-xs text-[#6A84AC] font-sans">Immediate SME tasks with guaranteed corporate funding.</p>
 					</div>
-					<a href="/tasks" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+					<a href="/tasks" class="font-mono text-xs font-bold uppercase tracking-wider text-[#1446A0] hover:underline">
 						View All ({tasks.length}) →
 					</a>
 				</div>
@@ -147,16 +143,13 @@
 				{#if loadingTasks}
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 						{#each Array(4) as _}
-							<div class="h-48 rounded-2xl bg-slate-200/60 animate-pulse"></div>
+							<div class="h-48 border border-[#C8D4E8] bg-white animate-pulse"></div>
 						{/each}
 					</div>
 				{:else if tasks.length === 0}
-					<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
-						<svg class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-						</svg>
-						<h3 class="mt-2 text-sm font-semibold text-slate-900">No open tasks right now</h3>
-						<p class="mt-1 text-xs text-slate-500">Check back shortly. The hub regularly matches new SME requests.</p>
+					<div class="border border-dashed border-[#C8D4E8] bg-white p-12 text-center">
+						<h3 class="font-serif text-lg text-[#0D1B3E]">No open tasks available</h3>
+						<p class="mt-1 text-xs text-[#6A84AC]">Please check back shortly as new SME tasks are posted daily.</p>
 					</div>
 				{:else}
 					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -169,29 +162,26 @@
 
 			<!-- Right Column (1 Col): My Experience Ledger -->
 			<div class="space-y-6">
-				<div class="flex items-center justify-between">
+				<div class="flex items-center justify-between border-b border-[#C8D4E8] pb-3">
 					<div>
-						<h2 class="text-xl font-bold text-slate-900">Experience Ledger</h2>
-						<p class="text-xs text-slate-500">Your verified work history and SME ratings.</p>
+						<h2 class="font-serif text-2xl text-[#0D1B3E]">Experience Ledger</h2>
+						<p class="text-xs text-[#6A84AC] font-sans">Your permanent record of capability.</p>
 					</div>
-					<span class="rounded-full bg-purple-50 px-2.5 py-0.5 text-xs font-bold text-purple-700 border border-purple-200">
-						{experiences.length} records
+					<span class="bg-[#EFF4FF] border border-[#C8D4E8] px-2 py-0.5 text-[10px] font-mono font-bold text-[#1446A0]">
+						{experiences.length} ENTRIES
 					</span>
 				</div>
 
 				{#if loadingExp}
 					<div class="space-y-4">
-						<div class="h-36 rounded-2xl bg-slate-200/60 animate-pulse"></div>
-						<div class="h-36 rounded-2xl bg-slate-200/60 animate-pulse"></div>
+						<div class="h-36 border border-[#C8D4E8] bg-white animate-pulse"></div>
+						<div class="h-36 border border-[#C8D4E8] bg-white animate-pulse"></div>
 					</div>
 				{:else if experiences.length === 0}
-					<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
-						<div class="mx-auto h-10 w-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center font-bold mb-2">
-							★
-						</div>
-						<h3 class="text-sm font-bold text-slate-900">Your Ledger is Clean</h3>
-						<p class="mt-1 text-xs text-slate-500 leading-relaxed">
-							Apply and complete your first SME task. Once verified by the business, your permanent proof of capability will appear here.
+					<div class="border border-dashed border-[#C8D4E8] bg-white p-8 text-center">
+						<h3 class="font-serif text-lg text-[#0D1B3E]">No entries recorded</h3>
+						<p class="mt-1 text-xs text-[#6A84AC] leading-relaxed">
+							Complete your first SME task to generate a verified proof entry.
 						</p>
 					</div>
 				{:else}
