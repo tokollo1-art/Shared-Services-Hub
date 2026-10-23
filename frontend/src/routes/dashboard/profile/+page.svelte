@@ -20,9 +20,9 @@
   // Read-only user info
   let fullName = $state("");
   let email = $state("");
+  let registrationNumber = $state("");
 
   // SME Fields
-  let registrationNumber = $state("");
   let enterpriseNumber = $state("");
   let registrationDate = $state("");
   let businessStartDate = $state("");
@@ -84,12 +84,8 @@
       // Populate SME fields
       registrationNumber =
         profile.registrationNumber || user?.registrationNumber || "";
-      enterpriseNumber =
-        profile.enterpriseNumber || user?.enterpriseNumber || "";
       registrationDate =
         profile.registrationDate || user?.registrationDate || "";
-      businessStartDate =
-        profile.businessStartDate || user?.businessStartDate || "";
 
       // Populate Student fields
       idNumber = profile.idNumber || user?.idNumber || "";
@@ -113,9 +109,7 @@
     errorMessage = null;
     successMessage = null;
 
-    // Validation checks for Youth role
     if (userRole === "YOUTH" || userRole === "ADMIN") {
-      // ID Number validation: exactly 13 digits only
       const idDigitsOnly = /^\d{13}$/;
       if (!idDigitsOnly.test(idNumber)) {
         errorMessage =
@@ -124,7 +118,16 @@
         return;
       }
 
-      // Cellphone validation: exactly 10 digits only
+      if (userRole === "SME" || userRole === "ADMIN") {
+        const regFormat = /^\d{4}\/\d{6}\/\d{2}$/;
+        if (!regFormat.test(registrationNumber)) {
+          errorMessage =
+            "Registration number must follow the strict format: 4 digits / 6 digits / 2 digits (e.g. 2021/123456/07).";
+          saving = false;
+          return;
+        }
+      }
+
       const phoneDigitsOnly = /^\d{10}$/;
       if (!phoneDigitsOnly.test(cellphoneNumber)) {
         errorMessage =
@@ -134,14 +137,11 @@
       }
     }
 
-    // Build payload dynamically based on role
     const payload =
       userRole === "SME"
         ? {
             registrationNumber: registrationNumber.trim(),
-            enterpriseNumber: enterpriseNumber.trim(),
             registrationDate,
-            businessStartDate,
             enterpriseType,
             enterpriseStatus,
             financialYearEnd,
