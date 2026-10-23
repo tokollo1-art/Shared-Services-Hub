@@ -3,6 +3,7 @@
 	import { auth } from '$lib/stores/auth.js';
 	import { toast } from '$lib/stores/toast.js';
 	import ApiError from '$lib/components/ApiError.svelte';
+	import { goto } from '$app/navigation';
 
 	let name = $state('');
 	let email = $state('');
@@ -61,6 +62,7 @@
 			const res = await api.auth.register(payload);
 			toast.success('Registration successful! Welcome to the hub.');
 			auth.login(res, true);
+			goto('dashboard/profile');  //Redirect to profile page
 		} catch (err) {
 			errorMessage = err.message || 'Registration failed. Please check your information.';
 		} finally {

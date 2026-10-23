@@ -130,7 +130,7 @@
 </script>
 
 <svelte:head>
-  <title>Profile Settings | Shared Services Hub</title>
+  <title>Complete Your Profile | Shared Services Hub</title>
 </svelte:head>
 
 <RoleGuard allowedRoles={["SME", "YOUTH", "ADMIN"]}>
