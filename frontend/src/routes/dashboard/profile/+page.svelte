@@ -25,7 +25,6 @@
   // SME Fields
   let enterpriseNumber = $state("");
   let registrationDate = $state("");
-  let businessStartDate = $state("");
   let enterpriseType = $state("");
   let enterpriseStatus = $state("");
   let financialYearEnd = $state("");
@@ -291,21 +290,6 @@
                 </div>
                 <div>
                   <label
-                    for="enterpriseNumber"
-                    class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
-                    >Enterprise Number *</label
-                  >
-                  <input
-                    id="enterpriseNumber"
-                    type="text"
-                    required
-                    bind:value={enterpriseNumber}
-                    placeholder="e.g. K2021123456"
-                    class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
-                  />
-                </div>
-                <div>
-                  <label
                     for="registrationDate"
                     class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
                     >Registration Date *</label
@@ -315,20 +299,6 @@
                     type="date"
                     required
                     bind:value={registrationDate}
-                    class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
-                  />
-                </div>
-                <div>
-                  <label
-                    for="businessStartDate"
-                    class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
-                    >Business Start Date *</label
-                  >
-                  <input
-                    id="businessStartDate"
-                    type="date"
-                    required
-                    bind:value={businessStartDate}
                     class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
                   />
                 </div>
