@@ -5,6 +5,8 @@
   import { currentUser } from "$lib/stores/auth.js";
   import { toast } from "$lib/stores/toast.js";
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import { getRoleDashboard } from "$lib/stores/auth.js";
 
   const user = $derived($currentUser);
   const userRole = $derived(user?.role?.toUpperCase() || "");
@@ -14,6 +16,10 @@
   let saving = $state(false);
   let errorMessage = $state(null);
   let successMessage = $state(null);
+
+  // Read-only user info
+  let fullName = $state("");
+  let email = $state("");
 
   // SME Fields
   let registrationNumber = $state("");
@@ -25,11 +31,12 @@
   let financialYearEnd = $state("");
 
   // Student / Youth Fields
-  let studentIdNumber = $state("");
+  let idNumber = $state("");
   let educationalInstitution = $state("");
   let primaryFieldOfStudy = $state("");
-  let graduationYear = $state("");
   let cellphoneNumber = $state("");
+  let isGraduated = $state(false);
+  let graduationYear = $state("");
 
   // Dropdowns
   const enterpriseTypes = [
@@ -54,12 +61,27 @@
     "December",
   ];
 
+  const currentYear = 2026;
+  const graduatedYears = Array.from(
+    { length: currentYear - 2000 + 1 },
+    (_, i) => String(currentYear - i),
+  );
+  const expectedYears = Array.from({ length: 10 }, (_, i) =>
+    String(currentYear + i),
+  );
+  const yearOptions = $derived(isGraduated ? graduatedYears : expectedYears);
+
   async function loadProfile() {
     loading = true;
     errorMessage = null;
     try {
       const profile = (await api.profile?.get?.()) || {};
 
+      // Populate Read-only user details
+      fullName = user?.name || profile.fullName || "";
+      email = user?.email || profile.email || "";
+
+      // Populate SME fields
       registrationNumber =
         profile.registrationNumber || user?.registrationNumber || "";
       enterpriseNumber =
@@ -70,13 +92,14 @@
         profile.businessStartDate || user?.businessStartDate || "";
 
       // Populate Student fields
-      studentIdNumber = profile.studentIdNumber || user?.studentIdNumber || "";
+      idNumber = profile.idNumber || user?.idNumber || "";
       educationalInstitution =
         profile.educationalInstitution || user?.educationalInstitution || "";
       primaryFieldOfStudy =
         profile.primaryFieldOfStudy || user?.primaryFieldOfStudy || "";
-      graduationYear = profile.graduationYear || user?.graduationYear || "";
       cellphoneNumber = profile.cellphoneNumber || user?.cellphoneNumber || "";
+      isGraduated = profile.isGraduated ?? user?.isGraduated ?? false;
+      graduationYear = profile.graduationYear || user?.graduationYear || "";
     } catch (err) {
       console.error("Failed to load profile:", err);
     } finally {
@@ -89,6 +112,27 @@
     saving = true;
     errorMessage = null;
     successMessage = null;
+
+    // Validation checks for Youth role
+    if (userRole === "YOUTH" || userRole === "ADMIN") {
+      // ID Number validation: exactly 13 digits only
+      const idDigitsOnly = /^\d{13}$/;
+      if (!idDigitsOnly.test(idNumber)) {
+        errorMessage =
+          "South African ID Number must be exactly 13 digits long and contain numbers only.";
+        saving = false;
+        return;
+      }
+
+      // Cellphone validation: exactly 10 digits only
+      const phoneDigitsOnly = /^\d{10}$/;
+      if (!phoneDigitsOnly.test(cellphoneNumber)) {
+        errorMessage =
+          "Cellphone number must be exactly 10 digits long and contain numbers only.";
+        saving = false;
+        return;
+      }
+    }
 
     // Build payload dynamically based on role
     const payload =
@@ -103,11 +147,12 @@
             financialYearEnd,
           }
         : {
-            studentIdNumber: studentIdNumber.trim(),
+            idNumber: idNumber.trim(),
             educationalInstitution: educationalInstitution.trim(),
             primaryFieldOfStudy: primaryFieldOfStudy.trim(),
-            graduationYear,
             cellphoneNumber: cellphoneNumber.trim(),
+            isGraduated,
+            graduationYear,
           };
 
     try {
@@ -116,6 +161,11 @@
       }
       toast.success("Profile updated successfully!");
       successMessage = "Your profile details have been saved.";
+
+      const targetDashboard = getRoleDashboard
+        ? getRoleDashboard(user?.role)
+        : "/dashboard/youth";
+      goto(targetDashboard);
     } catch (err) {
       errorMessage = err.message || "Failed to update profile.";
       toast.error("Save failed.");
@@ -179,6 +229,42 @@
     {:else}
       <div class="border-2 border-[#1446A0] bg-white p-6 sm:p-8 shadow-md">
         <form onsubmit={handleSaveProfile} class="space-y-6">
+          <!-- SHARED: Read-Only Full Name & Email -->
+          <div
+            class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6 border-b border-[#C8D4E8]"
+          >
+            <div>
+              <label
+                for="fullName"
+                class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
+              >
+                Full Name (Locked)
+              </label>
+              <input
+                id="fullName"
+                type="text"
+                disabled
+                value={fullName}
+                class="mt-1.5 block w-full px-4 py-2.5 text-sm font-sans bg-[#F2F5FA] border border-[#C8D4E8] text-[#6A84AC] cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label
+                for="emailAddress"
+                class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
+              >
+                Email Address (Locked)
+              </label>
+              <input
+                id="emailAddress"
+                type="text"
+                disabled
+                value={email}
+                class="mt-1.5 block w-full px-4 py-2.5 text-sm font-mono bg-[#F2F5FA] border border-[#C8D4E8] text-[#6A84AC] cursor-not-allowed"
+              />
+            </div>
+          </div>
+
           <!-- CONDITIONAL SECTION: SME PROFILE FIELDS -->
           {#if userRole === "SME" || userRole === "ADMIN"}
             <div class="space-y-6">
@@ -307,21 +393,49 @@
                 Student & Academic Credentials
               </h3>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- ID Number (Strictly 13 digits) -->
                 <div>
                   <label
-                    for="studentIdNumber"
+                    for="idNumber"
                     class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
-                    >Student / ID Number *</label
+                    >ID Number (13 Digits) *</label
                   >
                   <input
-                    id="studentIdNumber"
+                    id="idNumber"
                     type="text"
+                    maxlength="13"
                     required
-                    bind:value={studentIdNumber}
-                    placeholder="e.g. STU9876543 or ID Number"
+                    bind:value={idNumber}
+                    placeholder="e.g. 0101015009088"
                     class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
                   />
+                  <span class="text-[10px] text-[#6A84AC] font-mono mt-1 block"
+                    >Must be exactly 13 digits</span
+                  >
                 </div>
+
+                <!-- Cellphone Number (Strictly 10 digits) -->
+                <div>
+                  <label
+                    for="cellphoneNumber"
+                    class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
+                    >Cellphone Number (10 Digits) *</label
+                  >
+                  <input
+                    id="cellphoneNumber"
+                    type="tel"
+                    maxlength="10"
+                    required
+                    bind:value={cellphoneNumber}
+                    placeholder="e.g. 0821234567"
+                    class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
+                  />
+                  <span class="text-[10px] text-[#6A84AC] font-mono mt-1 block"
+                    >Must be exactly 10 digits</span
+                  >
+                </div>
+
+                <!-- Educational Institution -->
                 <div>
                   <label
                     for="educationalInstitution"
@@ -337,6 +451,8 @@
                     class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
                   />
                 </div>
+
+                <!-- Primary Field of Study -->
                 <div>
                   <label
                     for="primaryFieldOfStudy"
@@ -352,37 +468,44 @@
                     class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
                   />
                 </div>
-                <div>
+
+                <!-- Graduation Checkbox -->
+                <div class="md:col-span-2 pt-2">
+                  <label class="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      bind:checked={isGraduated}
+                      class="h-4 w-4 rounded-none text-[#1446A0] focus:ring-0 border-[#C8D4E8]"
+                    />
+                    <span
+                      class="text-sm font-sans font-semibold text-[#0D1B3E]"
+                    >
+                      Have you already graduated?
+                    </span>
+                  </label>
+                </div>
+
+                <!-- Conditional Graduation Year / Expected Graduation Year Dropdown -->
+                <div class="md:col-span-2">
                   <label
                     for="graduationYear"
                     class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
-                    >Expected / Completion Year *</label
                   >
-                  <input
+                    {isGraduated
+                      ? "Year Graduated *"
+                      : "Expected Graduation Year *"}
+                  </label>
+                  <select
                     id="graduationYear"
-                    type="number"
-                    min="2020"
-                    max="2035"
-                    required
                     bind:value={graduationYear}
-                    placeholder="2026"
-                    class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
-                  />
-                </div>
-                <div>
-                  <label
-                    for="cellphoneNumber"
-                    class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
-                    >Cellphone Number *</label
-                  >
-                  <input
-                    id="cellphoneNumber"
-                    type="tel"
                     required
-                    bind:value={cellphoneNumber}
-                    placeholder="e.g. 0821234567"
                     class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
-                  />
+                  >
+                    <option value="" disabled>Select Year</option>
+                    {#each yearOptions as yr}
+                      <option value={yr}>{yr}</option>
+                    {/each}
+                  </select>
                 </div>
               </div>
             </div>
