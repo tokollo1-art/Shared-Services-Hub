@@ -22,13 +22,23 @@
 	// Modals
 	let assignModalOpen = $state(false);
 	let youthIdToAssign = $state('');
+	let applicants = $state([]);
+	let loadingApplicants = $state(false);
 	let verifyModalOpen = $state(false);
 	let verifyRating = $state(5);
 	let verifyFeedback = $state('');
+	let verifyReference = $state('');
+	let rejectModalOpen = $state(false);
+	let rejectReason = $state('');
+
+	// The logged-in youth's application for this task (if any)
+	let myApplication = $state(null);
 
 	const isYouth = $derived(user?.role === 'YOUTH');
 	const isSme = $derived(user?.role === 'SME');
-	const isAssignedToMe = $derived(isYouth && task?.assignedToId && Number(task.assignedToId) === Number(user?.id));
+	const isAssignedToMe = $derived(
+		isYouth && myApplication?.status === 'ACCEPTED'
+	);
 
 	async function loadTask() {
 		loading = true;
@@ -43,6 +53,24 @@
 			loading = false;
 		}
 	}
+
+	async function loadMyApplication() {
+		if (!task) return;
+		try {
+			const apps = await api.applications.mine();
+			myApplication =
+				(apps || []).find((a) => Number(a.taskId) === Number(task.id)) || null;
+		} catch (appErr) {
+			console.warn('Could not load my application:', appErr);
+		}
+	}
+
+	// Wait for auth hydration so the youth-only application lookup has a role.
+	$effect(() => {
+		if (isYouth && task) {
+			loadMyApplication();
+		}
+	});
 
 	async function handleCompleteTask() {
 		if (!task) return;
@@ -59,16 +87,50 @@
 	}
 
 	async function handleApplyTask() {
-		if (!task || !user) return;
+		if (!task) return;
 		actionLoading = true;
 		try {
-			const res = await api.tasks.assign(task.id, user.id);
-			task = res;
-			toast.success('You have claimed this task! It is now IN_PROGRESS.');
+			myApplication = await api.applications.apply(task.id, '');
+			toast.success(
+				'Application submitted. The task is reserved for you for 48 hours while the SME reviews it.'
+			);
 		} catch (err) {
-			toast.error(err.message || 'Failed to claim task.');
+			toast.error(err.message || 'Failed to apply for task.');
 		} finally {
 			actionLoading = false;
+		}
+	}
+
+	async function handleWithdrawApplication() {
+		if (!myApplication) return;
+		actionLoading = true;
+		try {
+			await api.applications.withdraw(myApplication.id);
+			myApplication = { ...myApplication, status: 'WITHDRAWN' };
+			toast.success('Application withdrawn. Your reservation has been released.');
+		} catch (err) {
+			toast.error(err.message || 'Failed to withdraw application.');
+		} finally {
+			actionLoading = false;
+		}
+	}
+
+	async function openAssignModal() {
+		if (!task) return;
+		assignModalOpen = true;
+		loadingApplicants = true;
+		applicants = [];
+		youthIdToAssign = '';
+		try {
+			const res = await api.applications.forTask(task.id);
+			applicants = (res || []).filter((a) => a.status === 'PENDING');
+			if (applicants.length > 0) {
+				youthIdToAssign = String(applicants[0].youthId);
+			}
+		} catch (err) {
+			toast.error(err.message || 'Failed to load applicants.');
+		} finally {
+			loadingApplicants = false;
 		}
 	}
 
@@ -78,7 +140,7 @@
 		try {
 			const res = await api.tasks.assign(task.id, youthIdToAssign);
 			task = res;
-			toast.success(`Task assigned to Candidate #${youthIdToAssign}!`);
+			toast.success('Task assigned to the selected applicant!');
 			assignModalOpen = false;
 		} catch (err) {
 			toast.error(err.message || 'Failed to assign task.');
@@ -87,16 +149,60 @@
 		}
 	}
 
+	function openVerifyModal() {
+		verifyRating = 5;
+		verifyFeedback = '';
+		verifyReference = '';
+		verifyModalOpen = true;
+	}
+
 	async function handleVerifySubmit() {
 		if (!task) return;
+		if (!verifyFeedback.trim()) {
+			toast.error('Written feedback is required.');
+			return;
+		}
+		if (!verifyReference.trim()) {
+			toast.error('A reference to the work you checked is required.');
+			return;
+		}
 		actionLoading = true;
 		try {
-			await api.experiences.verify(task.id, verifyFeedback, verifyRating);
+			await api.tasks.verify(
+				task.id,
+				verifyFeedback.trim(),
+				verifyRating,
+				verifyReference.trim()
+			);
 			toast.success('Experience verified and recorded to Experience Ledger!');
 			verifyModalOpen = false;
 			await loadTask();
 		} catch (err) {
 			toast.error(err.message || 'Failed to verify experience.');
+		} finally {
+			actionLoading = false;
+		}
+	}
+
+	function openRejectModal() {
+		rejectReason = '';
+		rejectModalOpen = true;
+	}
+
+	async function handleRejectSubmit() {
+		if (!task) return;
+		if (!rejectReason.trim()) {
+			toast.error('A revision reason is required.');
+			return;
+		}
+		actionLoading = true;
+		try {
+			const res = await api.tasks.reject(task.id, rejectReason.trim());
+			task = res;
+			toast.success('Task sent back to the youth for revision.');
+			rejectModalOpen = false;
+		} catch (err) {
+			toast.error(err.message || 'Failed to send task back for revision.');
 		} finally {
 			actionLoading = false;
 		}
@@ -205,33 +311,70 @@
 						</div>
 					</div>
 
+					<!-- Revision Request Banner -->
+					{#if task.revisionReason}
+						<div class="mt-6 border-l-4 border-l-[#C49420] border border-[#C8D4E8] bg-[#FFF8E6] p-4">
+							<div class="font-mono text-[10px] font-bold uppercase tracking-wider text-[#8A6A12]">
+								SME Requested a Revision
+								{#if task.revisionCount}
+									· Round {task.revisionCount}
+								{/if}
+							</div>
+							<p class="mt-1 font-sans text-sm text-[#465A7A]">{task.revisionReason}</p>
+						</div>
+					{/if}
+
 					<!-- Role-Specific Action Bar -->
 					<div class="mt-8 pt-6 border-t border-[#C8D4E8] flex flex-wrap items-center justify-between gap-4">
 						<div class="font-mono text-xs text-[#6A84AC]">
 							Status: <span class="font-bold text-[#0D1B3E]">{task.status}</span>
 						</div>
 
-						<div class="flex items-center gap-3">
+						<div class="flex items-center gap-3 flex-wrap">
 							<!-- YOUTH ACTIONS -->
 							{#if isYouth}
 								{#if task.status === 'OPEN'}
-									<button
-										type="button"
-										disabled={actionLoading}
-										class="cape-btn-primary px-6 py-2.5 text-xs font-mono uppercase tracking-wider disabled:opacity-50"
-										onclick={handleApplyTask}
-									>
-										{actionLoading ? 'Claiming...' : 'Claim / Apply for Task'}
-									</button>
+									{#if myApplication?.status === 'PENDING'}
+										<span class="border border-[#C49420] bg-[#FFF8E6] px-4 py-2 text-xs font-mono font-bold text-[#C49420] uppercase">
+											Application Pending · Reserved 48h
+										</span>
+										<button
+											type="button"
+											disabled={actionLoading}
+											class="cape-btn-secondary px-4 py-2 text-xs font-mono uppercase tracking-wider disabled:opacity-50"
+											onclick={handleWithdrawApplication}
+										>
+											Withdraw
+										</button>
+									{:else if myApplication?.status === 'ACCEPTED'}
+										<span class="border border-[#1A8A55] bg-[#EDFBF4] px-4 py-2 text-xs font-mono font-bold text-[#1A8A55] uppercase">
+											Accepted · Awaiting Task Start
+										</span>
+									{:else}
+										<button
+											type="button"
+											disabled={actionLoading}
+											class="cape-btn-primary px-6 py-2.5 text-xs font-mono uppercase tracking-wider disabled:opacity-50"
+											onclick={handleApplyTask}
+										>
+											{actionLoading ? 'Submitting...' : 'Apply for Task'}
+										</button>
+									{/if}
 								{:else if task.status === 'IN_PROGRESS'}
-									<button
-										type="button"
-										disabled={actionLoading}
-										class="bg-[#1A8A55] text-white px-6 py-2.5 text-xs font-mono uppercase tracking-wider font-bold hover:bg-[#146e43] transition-colors disabled:opacity-50"
-										onclick={handleCompleteTask}
-									>
-										{actionLoading ? 'Submitting...' : 'Mark as Completed'}
-									</button>
+									{#if isAssignedToMe}
+										<button
+											type="button"
+											disabled={actionLoading}
+											class="bg-[#1A8A55] text-white px-6 py-2.5 text-xs font-mono uppercase tracking-wider font-bold hover:bg-[#146e43] transition-colors disabled:opacity-50"
+											onclick={handleCompleteTask}
+										>
+											{actionLoading ? 'Submitting...' : 'Mark as Completed'}
+										</button>
+									{:else}
+										<span class="border border-[#C8D4E8] bg-[#F8F9FC] px-4 py-2 text-xs font-mono font-bold text-[#6A84AC] uppercase">
+											Already Assigned to Another Candidate
+										</span>
+									{/if}
 								{:else if task.status === 'COMPLETED'}
 									<span class="border border-[#C49420] bg-[#FFF8E6] px-4 py-2 text-xs font-mono font-bold text-[#C49420] uppercase">
 										Awaiting SME Evaluation
@@ -249,25 +392,33 @@
 									<button
 										type="button"
 										class="cape-btn-primary px-5 py-2.5 text-xs font-mono uppercase tracking-wider"
-										onclick={() => {
-											youthIdToAssign = '1';
-											assignModalOpen = true;
-										}}
+										onclick={openAssignModal}
 									>
-										Assign to Candidate
+										Review Applicants &amp; Assign
 									</button>
-								{:else if task.status === 'IN_PROGRESS' || task.status === 'COMPLETED'}
+								{:else if task.status === 'COMPLETED'}
 									<button
 										type="button"
 										class="bg-[#7C3FE4] text-white px-5 py-2.5 text-xs font-mono uppercase tracking-wider font-bold hover:bg-[#682ec7] transition-colors"
-										onclick={() => {
-											verifyRating = 5;
-											verifyFeedback = 'Exceptional work delivered with high accuracy.';
-											verifyModalOpen = true;
-										}}
+										onclick={openVerifyModal}
 									>
 										Verify Experience
 									</button>
+									<button
+										type="button"
+										class="cape-btn-secondary px-4 py-2.5 text-xs font-mono uppercase tracking-wider"
+										onclick={openRejectModal}
+									>
+										Send Back for Revision
+									</button>
+								{:else if task.status === 'IN_PROGRESS'}
+									<span class="border border-[#C8D4E8] bg-[#F8F9FC] px-4 py-2 text-xs font-mono font-bold text-[#6A84AC] uppercase">
+										Awaiting Youth Completion
+									</span>
+								{:else if task.status === 'VERIFIED'}
+									<span class="border border-[#7C3FE4] bg-[#F5EEFF] px-4 py-2 text-xs font-mono font-bold text-[#7C3FE4] uppercase">
+										✓ Verified &amp; Payment Created
+									</span>
 								{/if}
 							{/if}
 						</div>
@@ -285,22 +436,36 @@
 >
 	<div class="space-y-4">
 		<p class="text-xs text-[#465A7A] leading-relaxed font-sans">
-			Specify the Youth Candidate ID to assign this task.
+			Select one of the youth who applied. Assigning accepts that application and rejects the other pending applicants.
 		</p>
-		<div>
-			<label for="modalYouthId" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
-				Candidate ID *
-			</label>
-			<input
-				id="modalYouthId"
-				type="number"
-				min="1"
-				required
-				bind:value={youthIdToAssign}
-				placeholder="1"
-				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
-			/>
-		</div>
+
+		{#if loadingApplicants}
+			<div class="border border-[#C8D4E8] bg-[#F8F9FC] p-4 font-mono text-xs text-[#6A84AC]">
+				Loading applicants...
+			</div>
+		{:else if applicants.length === 0}
+			<div class="border border-[#C49420] bg-[#FFF8E6] p-4 font-sans text-xs text-[#8A6A12]">
+				No pending applications yet. A youth must apply for this task before you can assign it.
+			</div>
+		{:else}
+			<div>
+				<label for="modalYouthId" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
+					Pending Applicant *
+				</label>
+				<select
+					id="modalYouthId"
+					required
+					bind:value={youthIdToAssign}
+					class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
+				>
+					{#each applicants as applicant}
+						<option value={String(applicant.youthId)}>
+							{applicant.youthName || `Youth #${applicant.youthId}`} — applied {formatDate(applicant.appliedAt, true)}
+						</option>
+					{/each}
+				</select>
+			</div>
+		{/if}
 	</div>
 
 	{#snippet footer()}
@@ -313,7 +478,7 @@
 		</button>
 		<button
 			type="button"
-			disabled={actionLoading}
+			disabled={actionLoading || loadingApplicants || !youthIdToAssign}
 			class="cape-btn-primary px-5 py-2 text-xs font-mono uppercase tracking-widest disabled:opacity-50"
 			onclick={handleAssignSubmit}
 		>
@@ -334,7 +499,7 @@
 
 		<div>
 			<div class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E] mb-1.5">
-				Performance Rating (0 to 5 Stars) *
+				Performance Rating (1 to 5 Stars) *
 			</div>
 			<StarRating bind:rating={verifyRating} interactive={true} size="lg" />
 		</div>
@@ -350,6 +515,22 @@
 				placeholder="Provide feedback on communication, turnaround time, quality..."
 				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
 			></textarea>
+		</div>
+
+		<div>
+			<label for="detailReference" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
+				Evidence Reference *
+			</label>
+			<input
+				id="detailReference"
+				type="text"
+				bind:value={verifyReference}
+				placeholder="e.g. Invoice batch #INV-2026-04 or shared drive link"
+				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
+			/>
+			<p class="mt-1 font-sans text-[11px] text-[#6A84AC]">
+				Stored on the public verification record so anyone can confirm what was checked.
+			</p>
 		</div>
 	</div>
 
@@ -368,6 +549,49 @@
 			onclick={handleVerifySubmit}
 		>
 			{actionLoading ? 'Verifying...' : 'Sign & Record to Ledger'}
+		</button>
+	{/snippet}
+</Modal>
+
+<!-- Modal: Send Back for Revision -->
+<Modal
+	bind:open={rejectModalOpen}
+	title={`Request Revision: ${task?.title || ''}`}
+>
+	<div class="space-y-4">
+		<p class="text-xs text-[#465A7A] leading-relaxed font-sans">
+			Explain what must be fixed. The task returns to IN_PROGRESS for the same youth, and no payment is created until the work is verified.
+		</p>
+
+		<div>
+			<label for="rejectReason" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
+				Revision Reason *
+			</label>
+			<textarea
+				id="rejectReason"
+				rows="3"
+				bind:value={rejectReason}
+				placeholder="e.g. Please reconcile the March invoices and attach the updated spreadsheet."
+				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
+			></textarea>
+		</div>
+	</div>
+
+	{#snippet footer()}
+		<button
+			type="button"
+			class="cape-btn-secondary px-4 py-2 text-xs font-mono uppercase tracking-wider"
+			onclick={() => (rejectModalOpen = false)}
+		>
+			Cancel
+		</button>
+		<button
+			type="button"
+			disabled={actionLoading}
+			class="bg-[#C49420] text-white px-5 py-2 text-xs font-mono uppercase tracking-widest font-bold hover:bg-[#a87c14] disabled:opacity-50"
+			onclick={handleRejectSubmit}
+		>
+			{actionLoading ? 'Sending...' : 'Send Back for Revision'}
 		</button>
 	{/snippet}
 </Modal>

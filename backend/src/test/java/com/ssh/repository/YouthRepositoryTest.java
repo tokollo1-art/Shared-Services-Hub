@@ -97,8 +97,12 @@ class YouthRepositoryTest {
             List<Youth> activeYouth = youthRepository.findByIsAlumniFalse();
 
             // Then
-            assertThat(activeYouth).hasSize(1);
-            assertThat(activeYouth.get(0).getUser().getEmail()).isEqualTo("sipho@ssh.co.za");
+            // The suite runs against the shared dev database, so assert on the
+            // youth created here instead of total table counts.
+            assertThat(activeYouth)
+                .extracting(youth -> youth.getUser().getEmail())
+                .contains("sipho@ssh.co.za")
+                .doesNotContain("thandi@ssh.co.za");
         }
     }
 

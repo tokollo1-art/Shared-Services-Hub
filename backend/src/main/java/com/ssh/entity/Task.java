@@ -3,6 +3,7 @@ package com.ssh.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import com.ssh.exception.InvalidTaskTransitionException;
 import java.time.LocalDateTime;
 
 /**
@@ -14,7 +15,6 @@ import java.time.LocalDateTime;
  *   - Youth complete tasks and earn income
  *   - Verified tasks become entries in the Experience Ledger
  *   - Tasks drive payment calculations
- * TODO: Add status enum (OPEN, IN_PROGRESS, COMPLETED, VERIFIED, CANCELLED)
  * TODO: Add category enum (ADMIN, TECH, DESIGN, MARKETING, etc.)
  * TODO: Add method to check if task is expired
  * TODO: Add relationship to Payment entity (1:1)
@@ -69,7 +69,7 @@ public class Task {
     @NotBlank(message = "Status is required")
     @Size(max = 20)
     @Column(nullable = false, length = 20)
-    private String status = "OPEN"; // OPEN, IN_PROGRESS, COMPLETED, VERIFIED, CANCELLED
+    private String status = "OPEN"; // See TaskStatus for the allowed lifecycle
 
     @Column
     private Double budget;
@@ -79,6 +79,20 @@ public class Task {
 
     @Column(name = "is_paid")
     private boolean isPaid = true;
+
+    /**
+     * The SME's reason for sending the last submission back for revision.
+     * Kept until the task is verified so the youth can read it while revising.
+     */
+    @Size(max = 1000)
+    @Column(name = "revision_reason", length = 1000)
+    private String revisionReason;
+
+    /**
+     * Number of times the SME has sent this task back for revision.
+     */
+    @Column(name = "revision_count", nullable = false)
+    private int revisionCount = 0;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -168,8 +182,100 @@ public class Task {
         return status;
     }
 
+    /**
+     * Sets the raw status value.
+     *
+     * Production code must NOT use this setter: it bypasses the task state
+     * machine. Use {@link #assignTo}, {@link #complete}, {@link #verify}, or
+     * {@link #sendBackForRevision} instead. It stays public for data loading
+     * and tests.
+     */
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    /**
+     * Returns the current status as a {@link TaskStatus}.
+     *
+     * @throws IllegalArgumentException when the stored status is unknown
+     */
+    public TaskStatus getStatusEnum() {
+        return TaskStatus.from(this.status);
+    }
+
+    /**
+     * Assigns the task to a youth and starts the work.
+     *
+     * @throws InvalidTaskTransitionException when the task is not OPEN
+     *         (re-assignment and assignment of completed work are rejected)
+     */
+    public void assignTo(Youth youth) {
+        requireStatus(TaskStatus.OPEN, "assign");
+        transitionTo(TaskStatus.IN_PROGRESS);
+        this.assignedTo = youth;
+        this.revisionReason = null;
+    }
+
+    /**
+     * Marks the task as completed by the assigned youth.
+     *
+     * @throws InvalidTaskTransitionException when the task is not IN_PROGRESS
+     *         (open, already completed, or verified tasks are rejected)
+     */
+    public void complete() {
+        requireStatus(TaskStatus.IN_PROGRESS, "complete");
+        transitionTo(TaskStatus.COMPLETED);
+    }
+
+    /**
+     * Marks the task as verified by the owning SME.
+     *
+     * @throws InvalidTaskTransitionException when the task is not COMPLETED
+     *         (verifying twice is rejected)
+     */
+    public void verify() {
+        requireStatus(TaskStatus.COMPLETED, "verify");
+        transitionTo(TaskStatus.VERIFIED);
+        this.revisionReason = null;
+    }
+
+    /**
+     * Sends completed work back to the assigned youth for revision.
+     * The task returns to IN_PROGRESS and can be completed and verified again.
+     *
+     * @param reason mandatory explanation the youth can act on
+     * @throws InvalidTaskTransitionException when the task is not COMPLETED
+     */
+    public void sendBackForRevision(String reason) {
+        requireStatus(TaskStatus.COMPLETED, "send back for revision");
+        transitionTo(TaskStatus.IN_PROGRESS);
+        this.revisionReason = reason;
+        this.revisionCount++;
+    }
+
+    /**
+     * Ensures the task is in the status an operation requires.
+     */
+    private void requireStatus(TaskStatus expected, String action) {
+        TaskStatus current = getStatusEnum();
+        if (current != expected) {
+            throw new InvalidTaskTransitionException(
+                "Cannot " + action + " task " + id
+                    + ": expected status " + expected + " but was " + current);
+        }
+    }
+
+    /**
+     * Moves the task to {@code next}, enforcing the task state machine.
+     *
+     * @throws InvalidTaskTransitionException when the transition is not allowed
+     */
+    private void transitionTo(TaskStatus next) {
+        TaskStatus current = getStatusEnum();
+        if (!current.canTransitionTo(next)) {
+            throw new InvalidTaskTransitionException(this.id, current, next);
+        }
+        this.status = next.name();
     }
 
     public Double getBudget() {
@@ -194,6 +300,22 @@ public class Task {
 
     public void setPaid(boolean paid) {
         isPaid = paid;
+    }
+
+    public String getRevisionReason() {
+        return revisionReason;
+    }
+
+    public void setRevisionReason(String revisionReason) {
+        this.revisionReason = revisionReason;
+    }
+
+    public int getRevisionCount() {
+        return revisionCount;
+    }
+
+    public void setRevisionCount(int revisionCount) {
+        this.revisionCount = revisionCount;
     }
 
     public LocalDateTime getCreatedAt() {

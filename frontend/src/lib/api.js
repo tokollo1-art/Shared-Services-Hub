@@ -5,7 +5,7 @@ import { toast } from '$lib/stores/toast.js';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 // In-browser mock fallback data for offline / demo preview
-const MOCK_STORAGE_KEY = 'ssh_mock_db_v1';
+const MOCK_STORAGE_KEY = 'ssh_mock_db_v2';
 
 function getMockDb() {
 	if (!browser) return null;
@@ -108,6 +108,7 @@ function getMockDb() {
 				isVerified: true,
 				feedback: 'Thabo showed exceptional attention to detail and completed customer verification ahead of schedule. Excellent communication skills.',
 				rating: 4.8,
+				reference: 'CRM export: customer-verification-batch-04.csv',
 				verifiedAt: new Date(Date.now() - 3600000 * 24 * 4).toISOString(),
 				taskId: 4,
 				taskTitle: 'Customer Onboarding & Verification Calls',
@@ -119,10 +120,11 @@ function getMockDb() {
 			},
 			{
 				id: 2,
-				status: 'PENDING_VERIFICATION',
+				status: 'PENDING',
 				isVerified: false,
 				feedback: null,
 				rating: null,
+				reference: null,
 				verifiedAt: null,
 				taskId: 3,
 				taskTitle: 'Financial Records Reconciliation & Invoicing',
@@ -132,7 +134,9 @@ function getMockDb() {
 				createdAt: new Date(Date.now() - 3600000 * 24 * 10).toISOString(),
 				updatedAt: new Date(Date.now() - 3600000 * 24 * 2).toISOString()
 			}
-		]
+		],
+		applications: [],
+		payments: []
 	};
 
 	saveMockDb(initialDb);
@@ -210,6 +214,11 @@ function handleMockFallback(endpoint, method, body) {
 		return db.tasks;
 	}
 
+	// TASKS: My posted tasks (SME)
+	if (cleanPath === '/api/v1/tasks/mine' && method === 'GET') {
+		return db.tasks.filter((t) => Number(t.smeId) === 101);
+	}
+
 	// TASKS: Get single
 	const taskGetMatch = cleanPath.match(/^\/api\/v1\/tasks\/(\d+)$/);
 	if (taskGetMatch && method === 'GET') {
@@ -249,12 +258,139 @@ function handleMockFallback(endpoint, method, body) {
 		const youthId = Number(params.get('youthId') || 1);
 		const task = db.tasks.find((t) => t.id === id);
 		if (!task) throw new Error('Task not found');
+		const application = db.applications.find(
+			(a) => a.taskId === id && Number(a.youthId) === youthId && a.status === 'PENDING'
+		);
+		if (!application) throw new Error('Youth has not applied for this task');
+		db.applications.forEach((a) => {
+			if (a.taskId === id && a.status === 'PENDING') {
+				a.status = Number(a.youthId) === youthId ? 'ACCEPTED' : 'REJECTED';
+				a.decidedAt = new Date().toISOString();
+			}
+		});
 		task.assignedToId = youthId;
-		task.assignedToName = 'Youth Candidate #' + youthId;
+		task.assignedToName = application.youthName || 'Youth Candidate #' + youthId;
 		task.status = 'IN_PROGRESS';
 		task.updatedAt = new Date().toISOString();
 		saveMockDb(db);
 		return task;
+	}
+
+	// APPLICATIONS: Apply
+	const applyMatch = cleanPath.match(/^\/api\/v1\/tasks\/(\d+)\/apply$/);
+	if (applyMatch && method === 'POST') {
+		const id = Number(applyMatch[1]);
+		const task = db.tasks.find((t) => t.id === id);
+		if (!task || task.status !== 'OPEN') throw new Error('Task is not open for applications');
+		const youthId = 1;
+		let application = db.applications.find(
+			(a) => a.taskId === id && Number(a.youthId) === youthId
+		);
+		if (application && ['PENDING', 'ACCEPTED'].includes(application.status)) {
+			throw new Error('An application for this task is already pending');
+		}
+		const verified = db.experiences.filter(
+			(e) => Number(e.youthId) === youthId && e.isVerified
+		).length;
+		const limits = [1, 2, 3, Infinity];
+		const tierIndex = verified >= 5 ? 3 : verified >= 3 ? 2 : verified >= 1 ? 1 : 0;
+		const active =
+			db.applications.filter(
+				(a) => Number(a.youthId) === youthId && a.status === 'PENDING'
+			).length +
+			db.tasks.filter(
+				(t) => t.status === 'IN_PROGRESS' && Number(t.assignedToId) === youthId
+			).length;
+		if (active >= limits[tierIndex]) {
+			throw new Error(
+				`Tier TIER_${tierIndex} allows at most ${limits[tierIndex]} active reservation(s)`
+			);
+		}
+		const expiresAt = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
+		if (!application) {
+			application = {
+				id: db.applications.length + 1,
+				taskId: id,
+				taskTitle: task.title,
+				youthId,
+				youthName: 'Thabo Mokoena',
+				status: 'PENDING',
+				coverNote: body?.coverNote || '',
+				appliedAt: new Date().toISOString(),
+				expiresAt,
+				decidedAt: null
+			};
+			db.applications.push(application);
+		} else {
+			application.status = 'PENDING';
+			application.coverNote = body?.coverNote || '';
+			application.expiresAt = expiresAt;
+			application.decidedAt = null;
+		}
+		saveMockDb(db);
+		return application;
+	}
+
+	// APPLICATIONS: Mine
+	if (cleanPath === '/api/v1/applications/mine' && method === 'GET') {
+		return db.applications.filter((a) => Number(a.youthId) === 1);
+	}
+
+	// APPLICATIONS: For a task (SME)
+	const taskApplicationsMatch = cleanPath.match(/^\/api\/v1\/tasks\/(\d+)\/applications$/);
+	if (taskApplicationsMatch && method === 'GET') {
+		const id = Number(taskApplicationsMatch[1]);
+		return db.applications.filter((a) => a.taskId === id);
+	}
+
+	// APPLICATIONS: Withdraw
+	const withdrawMatch = cleanPath.match(/^\/api\/v1\/applications\/(\d+)\/withdraw$/);
+	if (withdrawMatch && method === 'PATCH') {
+		const id = Number(withdrawMatch[1]);
+		const application = db.applications.find((a) => a.id === id);
+		if (!application) throw new Error('Application not found');
+		application.status = 'WITHDRAWN';
+		application.decidedAt = new Date().toISOString();
+		saveMockDb(db);
+		return application;
+	}
+
+	// TIERS: Mine
+	if (cleanPath === '/api/v1/tiers/me' && method === 'GET') {
+		const verified = db.experiences.filter(
+			(e) => Number(e.youthId) === 1 && e.isVerified
+		).length;
+		const tierIndex = verified >= 5 ? 3 : verified >= 3 ? 2 : verified >= 1 ? 1 : 0;
+		const limits = [1, 2, 3, 2147483647];
+		const active =
+			db.applications.filter((a) => Number(a.youthId) === 1 && a.status === 'PENDING')
+				.length +
+			db.tasks.filter(
+				(t) => t.status === 'IN_PROGRESS' && Number(t.assignedToId) === 1
+			).length;
+		return {
+			tier: `TIER_${tierIndex}`,
+			verifiedExperienceCount: verified,
+			minVerifiedExperiences: [0, 1, 3, 5][tierIndex],
+			maxVerifiedExperiences: [0, 2, 4, 2147483647][tierIndex],
+			activeReservations: active,
+			maxConcurrentReservations: limits[tierIndex],
+			reservationWindowHours: 48,
+			canApply: active < limits[tierIndex],
+			checkedAt: new Date().toISOString()
+		};
+	}
+
+	// YOUTH: My profile
+	if (cleanPath === '/api/v1/youth/me' && method === 'GET') {
+		return {
+			id: 1,
+			userId: 1,
+			userName: 'Thabo Mokoena',
+			location: 'Cape Town',
+			availability: 'Immediate',
+			isAlumni: false
+		};
 	}
 
 	// TASKS: Complete
@@ -271,10 +407,11 @@ function handleMockFallback(endpoint, method, body) {
 		if (!exp) {
 			exp = {
 				id: db.experiences.length + 1,
-				status: 'PENDING_VERIFICATION',
+				status: 'PENDING',
 				isVerified: false,
 				feedback: null,
 				rating: null,
+				reference: null,
 				verifiedAt: null,
 				taskId: task.id,
 				taskTitle: task.title,
@@ -285,6 +422,91 @@ function handleMockFallback(endpoint, method, body) {
 				updatedAt: new Date().toISOString()
 			};
 			db.experiences.unshift(exp);
+		} else {
+			exp.status = 'PENDING';
+			exp.isVerified = false;
+			exp.verifiedAt = null;
+		}
+		saveMockDb(db);
+		return task;
+	}
+
+	// TASKS: Verify (rating + feedback + reference in the body)
+	const taskVerifyMatch = cleanPath.match(/^\/api\/v1\/tasks\/(\d+)\/verify$/);
+	if (taskVerifyMatch && method === 'PATCH') {
+		const id = Number(taskVerifyMatch[1]);
+		const task = db.tasks.find((t) => t.id === id);
+		if (!task) throw new Error('Task not found');
+		if (task.status !== 'COMPLETED') throw new Error('Only a COMPLETED task can be verified');
+		if (!body?.feedback || !body?.reference || !body?.rating) {
+			throw new Error('Rating, feedback and reference are required');
+		}
+
+		task.status = 'VERIFIED';
+		task.updatedAt = new Date().toISOString();
+
+		let exp = db.experiences.find((e) => e.taskId === id);
+		if (!exp) {
+			exp = {
+				id: db.experiences.length + 1,
+				taskId: task.id,
+				taskTitle: task.title,
+				smeBusinessName: task.smeBusinessName || 'SME Partner',
+				youthId: task.assignedToId || 1,
+				youthName: task.assignedToName || 'Youth Candidate',
+				createdAt: new Date().toISOString()
+			};
+			db.experiences.unshift(exp);
+		}
+		exp.status = 'VERIFIED';
+		exp.isVerified = true;
+		exp.feedback = body.feedback;
+		exp.rating = Number(body.rating);
+		exp.reference = body.reference;
+		exp.verifiedAt = new Date().toISOString();
+		exp.updatedAt = new Date().toISOString();
+
+		let payment = db.payments.find((p) => p.taskId === id);
+		if (!payment) {
+			const total = Number(task.budget) || 0;
+			const platformFee = Math.round(total * 0.1 * 100) / 100;
+			payment = {
+				id: db.payments.length + 1,
+				taskId: id,
+				taskTitle: task.title,
+				youthId: exp.youthId,
+				youthName: exp.youthName,
+				totalAmount: total,
+				platformFee,
+				youthAmount: Math.round((total - platformFee) * 100) / 100,
+				status: 'PENDING',
+				reference: null,
+				paidAt: null,
+				createdAt: new Date().toISOString()
+			};
+			db.payments.push(payment);
+		}
+		saveMockDb(db);
+		return { task, experience: exp, payment };
+	}
+
+	// TASKS: Send back for revision
+	const taskRejectMatch = cleanPath.match(/^\/api\/v1\/tasks\/(\d+)\/reject$/);
+	if (taskRejectMatch && method === 'PATCH') {
+		const id = Number(taskRejectMatch[1]);
+		const task = db.tasks.find((t) => t.id === id);
+		if (!task) throw new Error('Task not found');
+		if (task.status !== 'COMPLETED') throw new Error('Only a COMPLETED task can be revised');
+		if (!body?.reason) throw new Error('A revision reason is required');
+		task.status = 'IN_PROGRESS';
+		task.revisionReason = body.reason;
+		task.revisionCount = (task.revisionCount || 0) + 1;
+		task.updatedAt = new Date().toISOString();
+		const exp = db.experiences.find((e) => e.taskId === id);
+		if (exp) {
+			exp.status = 'REJECTED';
+			exp.rejectionReason = body.reason;
+			exp.updatedAt = new Date().toISOString();
 		}
 		saveMockDb(db);
 		return task;
@@ -310,15 +532,18 @@ function handleMockFallback(endpoint, method, body) {
 	const expVerifyMatch = cleanPath.match(/^\/api\/v1\/experiences\/(\d+)\/verify$/);
 	if (expVerifyMatch && method === 'PATCH') {
 		const id = Number(expVerifyMatch[1]);
-		const feedback = params.get('feedback') || '';
-		const rating = Number(params.get('rating') || 5);
+		const feedback = body?.feedback || '';
+		const rating = Number(body?.rating || 5);
+		const reference = body?.reference || '';
 		const exp = db.experiences.find((e) => e.id === id);
 		if (!exp) throw new Error('Experience not found');
+		if (!feedback || !reference) throw new Error('Feedback and reference are required');
 
 		exp.isVerified = true;
 		exp.status = 'VERIFIED';
 		exp.feedback = feedback;
 		exp.rating = rating;
+		exp.reference = reference;
 		exp.verifiedAt = new Date().toISOString();
 		exp.updatedAt = new Date().toISOString();
 
@@ -331,6 +556,54 @@ function handleMockFallback(endpoint, method, body) {
 
 		saveMockDb(db);
 		return exp;
+	}
+
+	// EXPERIENCES: My payments
+	if (cleanPath === '/api/v1/payments/mine' && method === 'GET') {
+		return db.payments.filter((p) => Number(p.youthId) === 1);
+	}
+
+	// PAYMENTS: Payout (sandbox)
+	const payoutMatch = cleanPath.match(/^\/api\/v1\/payments\/(\d+)\/payout$/);
+	if (payoutMatch && method === 'POST') {
+		const id = Number(payoutMatch[1]);
+		const payment = db.payments.find((p) => p.id === id);
+		if (!payment) throw new Error('Payment not found');
+		if (payment.status === 'PAID') throw new Error('Payment has already been paid');
+		payment.status = 'PAID';
+		payment.reference = 'SANDBOX-' + Date.now();
+		payment.paidAt = new Date().toISOString();
+		saveMockDb(db);
+		return payment;
+	}
+
+	// LEDGER: Public entries
+	if (cleanPath === '/api/v1/ledger/entries' && method === 'GET') {
+		return db.experiences
+			.filter((e) => e.isVerified)
+			.map((e, index) => ({
+				id: index + 1,
+				sequence: index + 1,
+				experienceId: e.id,
+				taskId: e.taskId,
+				youthId: e.youthId,
+				rating: e.rating,
+				feedback: e.feedback,
+				reference: e.reference,
+				verifiedAt: e.verifiedAt,
+				previousHash: index === 0 ? 'GENESIS' : 'demo-hash-' + index,
+				hash: 'demo-hash-' + (index + 1)
+			}));
+	}
+
+	// LEDGER: Verify chain
+	if (cleanPath === '/api/v1/ledger/verify' && method === 'GET') {
+		return {
+			valid: true,
+			checkedEntries: db.experiences.filter((e) => e.isVerified).length,
+			brokenAtSequence: null,
+			message: 'Ledger chain is intact'
+		};
 	}
 
 	throw new Error(`Unhandled mock route: ${method} ${endpoint}`);
@@ -430,21 +703,59 @@ export const api = {
 	},
 	tasks: {
 		list: () => api.get('/api/v1/tasks'),
+		mine: () => api.get('/api/v1/tasks/mine'),
 		get: (id) => api.get(`/api/v1/tasks/${id}`),
 		create: (task) => api.post('/api/v1/tasks', task),
-		assign: (id, youthId) => api.patch(`/api/v1/tasks/${id}/assign?youthId=${encodeURIComponent(youthId)}`),
-		complete: (id) => api.patch(`/api/v1/tasks/${id}/complete`)
+		assign: (id, youthId) =>
+			api.patch(`/api/v1/tasks/${id}/assign?youthId=${encodeURIComponent(youthId)}`),
+		complete: (id) => api.patch(`/api/v1/tasks/${id}/complete`),
+		verify: (id, feedback, rating, reference) =>
+			api.patch(`/api/v1/tasks/${id}/verify`, {
+				feedback,
+				rating: Number(rating),
+				reference
+			}),
+		reject: (id, reason) => api.patch(`/api/v1/tasks/${id}/reject`, { reason })
+	},
+	applications: {
+		apply: (taskId, coverNote = '') =>
+			api.post(`/api/v1/tasks/${taskId}/apply`, { coverNote }),
+		mine: () => api.get('/api/v1/applications/mine'),
+		forTask: (taskId) => api.get(`/api/v1/tasks/${taskId}/applications`),
+		withdraw: (id) => api.patch(`/api/v1/applications/${id}/withdraw`)
+	},
+	tiers: {
+		me: () => api.get('/api/v1/tiers/me')
+	},
+	youth: {
+		me: () => api.get('/api/v1/youth/me')
 	},
 	experiences: {
 		get: (id) => api.get(`/api/v1/experiences/${id}`),
 		listForYouth: (youthId) => api.get(`/api/v1/experiences/youth/${youthId}`),
-		verify: (id, feedback = '', rating = 5) => {
-			const query = new URLSearchParams({
-				feedback: feedback || '',
-				rating: String(rating)
-			});
-			return api.patch(`/api/v1/experiences/${id}/verify?${query.toString()}`);
-		}
+		verify: (id, feedback, rating, reference) =>
+			api.patch(`/api/v1/experiences/${id}/verify`, {
+				feedback,
+				rating: Number(rating),
+				reference
+			})
+	},
+	payments: {
+		mine: () => api.get('/api/v1/payments/mine'),
+		get: (id) => api.get(`/api/v1/payments/${id}`),
+		payout: (id) => api.post(`/api/v1/payments/${id}/payout`)
+	},
+	wallet: {
+		reserve: () => api.get('/api/v1/wallets/reserve'),
+		fund: (amount, reference) =>
+			api.post('/api/v1/wallets/reserve/fund', { amount: Number(amount), reference }),
+		transactions: () => api.get('/api/v1/wallets/reserve/transactions')
+	},
+	ledger: {
+		entries: () => api.get('/api/v1/ledger/entries'),
+		verify: () => api.get('/api/v1/ledger/verify'),
+		verifyExperience: (experienceId) =>
+			api.get(`/api/v1/ledger/verify/${experienceId}`)
 	}
 };
 

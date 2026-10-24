@@ -8,12 +8,14 @@ import com.ssh.entity.SME;
 import com.ssh.entity.User;
 import com.ssh.entity.Youth;
 import com.ssh.exception.DuplicateResourceException;
+import com.ssh.exception.InvalidCredentialsException;
 import com.ssh.repository.SMERepository;
 import com.ssh.repository.UserRepository;
 import com.ssh.repository.YouthRepository;
 import com.ssh.security.JwtTokenProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -118,12 +120,18 @@ public class AuthService {
      */
     public AuthResponse login(LoginRequest request) {
         // 1. Let Spring Security verify credentials
-        Authentication authentication = authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(
-                request.getEmail(),
-                request.getPassword()
-            )
-        );
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                    request.getEmail(),
+                    request.getPassword()
+                )
+            );
+        } catch (BadCredentialsException e) {
+            // Unknown email or wrong password -> 401 Unauthorized
+            throw new InvalidCredentialsException("Invalid email or password");
+        }
 
         // 2. Load the user record
         User user = userRepository.findByEmail(request.getEmail())

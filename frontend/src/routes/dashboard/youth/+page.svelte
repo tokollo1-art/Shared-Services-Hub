@@ -12,11 +12,16 @@
 
 	let tasks = $state([]);
 	let experiences = $state([]);
+	let payments = $state([]);
+	let applications = $state([]);
+	let youthProfile = $state(null);
+	let tierInfo = $state(null);
 	let loadingTasks = $state(true);
 	let loadingExp = $state(true);
+	let loadingPayments = $state(true);
 	let errorMessage = $state(null);
 
-	const isAlumni = $derived(user?.isAlumni || false);
+	const isAlumni = $derived(Boolean(youthProfile?.isAlumni ?? youthProfile?.alumni));
 
 	// Summary stats
 	const verifiedExperiences = $derived(experiences.filter((e) => e.isVerified));
@@ -28,8 +33,19 @@
 	});
 
 	const totalEarned = $derived.by(() => {
-		return experiences.length * 1100;
+		return payments.reduce((sum, p) => sum + Number(p.youthAmount || 0), 0);
 	});
+
+	const activeReservations = $derived(
+		tierInfo?.activeReservations ?? applications.filter((a) => a.status === 'PENDING').length
+	);
+	const reservationLimitLabel = $derived(
+		tierInfo
+			? tierInfo.maxConcurrentReservations >= 1000
+				? 'Unlimited'
+				: tierInfo.maxConcurrentReservations
+			: ''
+	);
 
 	async function loadDashboardData() {
 		errorMessage = null;
@@ -45,15 +61,41 @@
 			loadingTasks = false;
 		}
 
-		const youthId = user?.id || 1;
+		// The experience/payment APIs key off the youth-table ID, not users.id.
+		try {
+			youthProfile = await api.youth.me();
+		} catch (err) {
+			console.warn('Could not resolve youth profile:', err);
+		}
+
+		const youthId = youthProfile?.id;
+
 		loadingExp = true;
 		try {
-			const res = await api.experiences.listForYouth(youthId);
-			experiences = Array.isArray(res) ? res : [];
+			if (youthId) {
+				const res = await api.experiences.listForYouth(youthId);
+				experiences = Array.isArray(res) ? res : [];
+			}
 		} catch (err) {
 			console.error('Failed to load experience ledger:', err);
 		} finally {
 			loadingExp = false;
+		}
+
+		loadingPayments = true;
+		try {
+			const [paymentRes, applicationRes, tierRes] = await Promise.all([
+				api.payments.mine(),
+				api.applications.mine(),
+				api.tiers.me()
+			]);
+			payments = Array.isArray(paymentRes) ? paymentRes : [];
+			applications = Array.isArray(applicationRes) ? applicationRes : [];
+			tierInfo = tierRes;
+		} catch (err) {
+			console.error('Failed to load youth financial/tier data:', err);
+		} finally {
+			loadingPayments = false;
 		}
 	}
 
@@ -85,10 +127,21 @@
 								ACTIVE CANDIDATE
 							</span>
 						{/if}
+						{#if tierInfo}
+							<span class="inline-block bg-[#7C3FE4] text-white px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-widest">
+								{tierInfo.tier?.replace('_', ' ')}
+							</span>
+						{/if}
 					</div>
 					<p class="mt-2 text-sm text-[#C8D4E8] max-w-xl font-light font-sans">
 						Complete verified tasks for local SMEs to expand your Experience Ledger and earn corporate-funded wages.
 					</p>
+					{#if tierInfo}
+						<p class="mt-2 font-mono text-[11px] uppercase tracking-wider text-[#9FB4D8]">
+							{activeReservations} of {reservationLimitLabel} reservations in use
+							· {tierInfo.verifiedExperienceCount} verified experience(s)
+						</p>
+					{/if}
 				</div>
 
 				<div class="flex items-center gap-3">
@@ -118,8 +171,10 @@
 					</div>
 				</div>
 				<div>
-					<div class="font-mono text-[11px] font-bold uppercase tracking-wider text-[#6A84AC]">Total Paid</div>
-					<div class="font-mono text-2xl font-bold mt-1 text-[#1A8A55]">{formatCurrency(totalEarned)}</div>
+					<div class="font-mono text-[11px] font-bold uppercase tracking-wider text-[#6A84AC]">Total Earned</div>
+					<div class="font-mono text-2xl font-bold mt-1 text-[#1A8A55]">
+						{loadingPayments ? '—' : formatCurrency(totalEarned)}
+					</div>
 				</div>
 			</div>
 		</div>

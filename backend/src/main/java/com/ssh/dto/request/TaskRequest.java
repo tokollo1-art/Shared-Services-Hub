@@ -1,5 +1,8 @@
 package com.ssh.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -108,10 +111,13 @@ public class TaskRequest {
         this.durationDays = durationDays;
     }
 
+    @JsonProperty("isPaid")
     public boolean isPaid() {
         return isPaid;
     }
 
+    @JsonProperty("isPaid")
+    @JsonAlias("paid")
     public void setPaid(boolean paid) {
         isPaid = paid;
     }

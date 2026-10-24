@@ -3,6 +3,7 @@ package com.ssh.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
@@ -26,11 +27,11 @@ import java.util.List;
 public class CorsConfig {
 
     /**
-     * CorsFilter bean — registered in the servlet filter chain.
+     * CorsConfigurationSource bean — provides CORS rules to Spring Security and MVC.
      */
     @Bean
-    public CorsFilter corsFilter() {
-        CorsConfiguration config = new CorsConfiguration();
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new AdvertisedHeadersCorsConfiguration();
 
         // Allow frontend dev origin(s). Add production URLs later.
         config.setAllowedOrigins(List.of(
@@ -56,6 +57,35 @@ public class CorsConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
 
-        return new CorsFilter(source);
+        return source;
+    }
+
+    /**
+     * CorsFilter bean — registered in the servlet filter chain.
+     */
+    @Bean
+    public CorsFilter corsFilter(CorsConfigurationSource corsConfigurationSource) {
+        return new CorsFilter(corsConfigurationSource);
+    }
+
+    /**
+     * CORS configuration that always advertises the allowed headers.
+     *
+     * WHY: Spring only echoes back the headers the browser asked for
+     *      ("Access-Control-Request-Headers"). When a preflight request does
+     *      not send that header, no "Access-Control-Allow-Headers" is written
+     *      at all, so the allowed header set stays implicit. This variant
+     *      falls back to the configured allowed headers instead.
+     */
+    private static class AdvertisedHeadersCorsConfiguration extends CorsConfiguration {
+
+        @Override
+        public List<String> checkHeaders(List<String> requestHeaders) {
+            List<String> checked = super.checkHeaders(requestHeaders);
+            if (checked == null || checked.isEmpty()) {
+                return getAllowedHeaders();
+            }
+            return checked;
+        }
     }
 }

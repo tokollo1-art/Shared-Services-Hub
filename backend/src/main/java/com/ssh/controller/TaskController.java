@@ -1,8 +1,11 @@
 package com.ssh.controller;
 
+import com.ssh.dto.request.RejectTaskRequest;
 import com.ssh.dto.request.TaskRequest;
+import com.ssh.dto.request.VerificationRequest;
 import com.ssh.dto.response.ApiResponse;
 import com.ssh.dto.response.TaskResponse;
+import com.ssh.dto.response.VerificationResponse;
 import com.ssh.service.TaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -75,6 +78,19 @@ public class TaskController {
     }
 
     /**
+     * List every task posted by the authenticated SME, in any status.
+     * This powers the SME dashboard.
+     */
+    @GetMapping("/mine")
+    @Operation(summary = "List my posted tasks (SME only)")
+    public ResponseEntity<ApiResponse<List<TaskResponse>>> listMyTasks(
+        Authentication authentication) {
+
+        List<TaskResponse> tasks = taskService.listMyTasks(authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success("My tasks", tasks));
+    }
+
+    /**
      * Get a single task by its ID.
      */
     @GetMapping("/{id}")
@@ -85,25 +101,68 @@ public class TaskController {
     }
 
     /**
-     * Assign a task to a youth. Typically called by the SME who owns the task.
+     * Assign a task to a youth.
+     * The SME identity is taken from the JWT; only the owner may assign.
      */
     @PatchMapping("/{id}/assign")
-    @Operation(summary = "Assign a task to a youth")
+    @Operation(summary = "Assign a task to a youth (owning SME only)")
     public ResponseEntity<ApiResponse<TaskResponse>> assignTask(
         @PathVariable Long id,
-        @RequestParam Long youthId) {
+        @RequestParam Long youthId,
+        Authentication authentication) {
 
-        TaskResponse assigned = taskService.assignTask(id, youthId);
+        TaskResponse assigned = taskService.assignTask(id, youthId, authentication.getName());
         return ResponseEntity.ok(ApiResponse.success("Task assigned", assigned));
     }
 
     /**
-     * Mark a task as completed. Called by the assigned youth.
+     * Mark a task as completed.
+     * The youth identity is taken from the JWT; only the assigned youth may complete.
      */
     @PatchMapping("/{id}/complete")
-    @Operation(summary = "Mark a task as completed")
-    public ResponseEntity<ApiResponse<TaskResponse>> completeTask(@PathVariable Long id) {
-        TaskResponse completed = taskService.completeTask(id);
+    @Operation(summary = "Mark a task as completed (assigned youth only)")
+    public ResponseEntity<ApiResponse<TaskResponse>> completeTask(
+        @PathVariable Long id,
+        Authentication authentication) {
+
+        TaskResponse completed = taskService.completeTask(id, authentication.getName());
         return ResponseEntity.ok(ApiResponse.success("Task completed", completed));
+    }
+
+    /**
+     * Verify a completed task. The SME supplies the mandatory rating,
+     * feedback and evidence reference in the request body.
+     */
+    @PatchMapping("/{id}/verify")
+    @Operation(
+        summary = "Verify a completed task (owning SME only)",
+        description = "Requires rating (1-5), feedback and a reference. Verifies the task and "
+            + "its Experience, creates the one Payment, appends the public ledger entry and "
+            + "publishes the verification event."
+    )
+    public ResponseEntity<ApiResponse<VerificationResponse>> verifyTask(
+        @PathVariable Long id,
+        @Valid @RequestBody VerificationRequest request,
+        Authentication authentication) {
+
+        VerificationResponse verified =
+            taskService.verifyTask(id, request, authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success("Task verified", verified));
+    }
+
+    /**
+     * Send a completed task back for revision. The task returns to IN_PROGRESS
+     * for the assigned youth; owner only.
+     */
+    @PatchMapping("/{id}/reject")
+    @Operation(summary = "Send a completed task back for revision (owning SME only)")
+    public ResponseEntity<ApiResponse<TaskResponse>> rejectTask(
+        @PathVariable Long id,
+        @Valid @RequestBody RejectTaskRequest request,
+        Authentication authentication) {
+
+        TaskResponse rejected =
+            taskService.rejectTask(id, request.reason(), authentication.getName());
+        return ResponseEntity.ok(ApiResponse.success("Task sent back for revision", rejected));
     }
 }

@@ -31,6 +31,8 @@
 	let assignModalOpen = $state(false);
 	let selectedTaskToAssign = $state(null);
 	let youthIdToAssign = $state('');
+	let applicants = $state([]);
+	let loadingApplicants = $state(false);
 	let assigning = $state(false);
 
 	// Verify Experience Modal State
@@ -38,7 +40,14 @@
 	let selectedTaskToVerify = $state(null);
 	let verifyRating = $state(5);
 	let verifyFeedback = $state('');
+	let verifyReference = $state('');
 	let verifying = $state(false);
+
+	// Send Back for Revision Modal State
+	let rejectModalOpen = $state(false);
+	let selectedTaskToReject = $state(null);
+	let rejectReason = $state('');
+	let rejecting = $state(false);
 
 	const categories = [
 		'Digital Operations',
@@ -53,7 +62,7 @@
 		loading = true;
 		errorMessage = null;
 		try {
-			const res = await api.tasks.list();
+			const res = await api.tasks.mine();
 			tasks = Array.isArray(res) ? res : [];
 		} catch (err) {
 			console.error('Failed to load SME tasks:', err);
@@ -98,10 +107,23 @@
 		}
 	}
 
-	function openAssignModal(task) {
+	async function openAssignModal(task) {
 		selectedTaskToAssign = task;
-		youthIdToAssign = '1';
+		youthIdToAssign = '';
+		applicants = [];
 		assignModalOpen = true;
+		loadingApplicants = true;
+		try {
+			const res = await api.applications.forTask(task.id);
+			applicants = (res || []).filter((a) => a.status === 'PENDING');
+			if (applicants.length > 0) {
+				youthIdToAssign = String(applicants[0].youthId);
+			}
+		} catch (err) {
+			toast.error(err.message || 'Failed to load applicants.');
+		} finally {
+			loadingApplicants = false;
+		}
 	}
 
 	async function handleAssignSubmit() {
@@ -110,7 +132,12 @@
 		assigning = true;
 		try {
 			await api.tasks.assign(selectedTaskToAssign.id, youthIdToAssign);
-			toast.success(`Task assigned to Candidate #${youthIdToAssign}!`);
+			const chosen = applicants.find(
+				(a) => String(a.youthId) === String(youthIdToAssign)
+			);
+			toast.success(
+				`Task assigned to ${chosen?.youthName || `Youth #${youthIdToAssign}`}!`
+			);
 			assignModalOpen = false;
 			await loadTasks();
 		} catch (err) {
@@ -124,23 +151,62 @@
 		selectedTaskToVerify = task;
 		verifyRating = 5;
 		verifyFeedback = 'Work was delivered accurately and ahead of deadline. Very dependable.';
+		verifyReference = '';
 		verifyModalOpen = true;
 	}
 
 	async function handleVerifySubmit() {
 		if (!selectedTaskToVerify) return;
+		if (!verifyFeedback.trim()) {
+			toast.error('Written feedback is required.');
+			return;
+		}
+		if (!verifyReference.trim()) {
+			toast.error('A reference to the work you checked is required.');
+			return;
+		}
 
 		verifying = true;
 		try {
-			const experienceId = selectedTaskToVerify.id;
-			await api.experiences.verify(experienceId, verifyFeedback, verifyRating);
-			toast.success('Experience verified and recorded into the Experience Ledger!');
+			await api.tasks.verify(
+				selectedTaskToVerify.id,
+				verifyFeedback.trim(),
+				verifyRating,
+				verifyReference.trim()
+			);
+			toast.success('Experience verified, payment created and ledger entry sealed!');
 			verifyModalOpen = false;
 			await loadTasks();
 		} catch (err) {
 			toast.error(err.message || 'Failed to verify experience.');
 		} finally {
 			verifying = false;
+		}
+	}
+
+	function openRejectModal(task) {
+		selectedTaskToReject = task;
+		rejectReason = '';
+		rejectModalOpen = true;
+	}
+
+	async function handleRejectSubmit() {
+		if (!selectedTaskToReject) return;
+		if (!rejectReason.trim()) {
+			toast.error('A revision reason is required.');
+			return;
+		}
+
+		rejecting = true;
+		try {
+			await api.tasks.reject(selectedTaskToReject.id, rejectReason.trim());
+			toast.success('Task sent back to the youth for revision.');
+			rejectModalOpen = false;
+			await loadTasks();
+		} catch (err) {
+			toast.error(err.message || 'Failed to send task back for revision.');
+		} finally {
+			rejecting = false;
 		}
 	}
 
@@ -393,22 +459,33 @@
 							</div>
 
 							<!-- Action Buttons -->
-							<div class="flex items-center gap-2.5 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-[#C8D4E8]">
+							<div class="flex items-center gap-2.5 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-[#C8D4E8] flex-wrap">
 								{#if task.status === 'OPEN'}
 									<button
 										type="button"
 										class="border border-[#1446A0] bg-[#EFF4FF] px-4 py-2 text-xs font-mono uppercase tracking-wider font-bold text-[#1446A0] hover:bg-[#1446A0] hover:text-white transition-colors"
 										onclick={() => openAssignModal(task)}
 									>
-										Assign to Youth
+										Review Applicants
 									</button>
-								{:else if task.status === 'IN_PROGRESS' || task.status === 'COMPLETED'}
+								{:else if task.status === 'IN_PROGRESS'}
+									<span class="border border-[#C8D4E8] bg-[#F8F9FC] px-3 py-1.5 text-xs font-mono font-bold text-[#6A84AC] uppercase">
+										Awaiting Completion
+									</span>
+								{:else if task.status === 'COMPLETED'}
 									<button
 										type="button"
 										class="bg-[#7C3FE4] px-4 py-2 text-xs font-mono uppercase tracking-wider font-bold text-white shadow-xs hover:bg-[#682ec7] transition-colors"
 										onclick={() => openVerifyModal(task)}
 									>
 										Verify Experience
+									</button>
+									<button
+										type="button"
+										class="border border-[#C49420] bg-[#FFF8E6] px-3.5 py-2 text-xs font-mono uppercase tracking-wider font-bold text-[#8A6A12] hover:bg-[#C49420] hover:text-white transition-colors"
+										onclick={() => openRejectModal(task)}
+									>
+										Revise
 									</button>
 								{:else if task.status === 'VERIFIED'}
 									<span class="border border-[#7C3FE4] bg-[#F5EEFF] px-3 py-1.5 text-xs font-mono font-bold text-[#7C3FE4] uppercase">
@@ -438,24 +515,38 @@
 >
 	<div class="space-y-4">
 		<p class="text-xs text-[#465A7A] leading-relaxed font-sans">
-			Specify the Youth Candidate ID to assign this task. Once assigned, the task status advances to
+			Choose one of the youth who applied for this task. The selected application is accepted, the other
+			pending applicants are released, and the task advances to
 			<span class="font-mono font-bold text-[#D4831A]">IN_PROGRESS</span>.
 		</p>
 
-		<div>
-			<label for="youthIdInput" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
-				Candidate ID *
-			</label>
-			<input
-				id="youthIdInput"
-				type="number"
-				min="1"
-				required
-				bind:value={youthIdToAssign}
-				placeholder="1"
-				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
-			/>
-		</div>
+		{#if loadingApplicants}
+			<div class="border border-[#C8D4E8] bg-[#F8F9FC] p-4 font-mono text-xs text-[#6A84AC]">
+				Loading applicants...
+			</div>
+		{:else if applicants.length === 0}
+			<div class="border border-[#C49420] bg-[#FFF8E6] p-4 font-sans text-xs text-[#8A6A12]">
+				No pending applications yet. Youth must apply before you can assign this task.
+			</div>
+		{:else}
+			<div>
+				<label for="youthIdInput" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
+					Pending Applicant *
+				</label>
+				<select
+					id="youthIdInput"
+					required
+					bind:value={youthIdToAssign}
+					class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
+				>
+					{#each applicants as applicant}
+						<option value={String(applicant.youthId)}>
+							{applicant.youthName || `Youth #${applicant.youthId}`} — applied {formatDate(applicant.appliedAt, true)}
+						</option>
+					{/each}
+				</select>
+			</div>
+		{/if}
 	</div>
 
 	{#snippet footer()}
@@ -468,7 +559,7 @@
 		</button>
 		<button
 			type="button"
-			disabled={assigning}
+			disabled={assigning || loadingApplicants || !youthIdToAssign}
 			class="cape-btn-primary px-5 py-2 text-xs font-mono uppercase tracking-widest disabled:opacity-50"
 			onclick={handleAssignSubmit}
 		>
@@ -489,7 +580,7 @@
 
 		<div>
 			<div class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E] mb-1.5">
-				Performance Rating (0 to 5 Stars) *
+				Performance Rating (1 to 5 Stars) *
 			</div>
 			<StarRating bind:rating={verifyRating} interactive={true} size="lg" />
 		</div>
@@ -505,6 +596,22 @@
 				placeholder="Provide specific comments on quality, speed, and deliverables..."
 				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
 			></textarea>
+		</div>
+
+		<div>
+			<label for="verifyReferenceInput" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
+				Evidence Reference *
+			</label>
+			<input
+				id="verifyReferenceInput"
+				type="text"
+				bind:value={verifyReference}
+				placeholder="e.g. Reconciled workbook FIN-MAR-2026.xlsx"
+				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
+			/>
+			<p class="mt-1 font-sans text-[11px] text-[#6A84AC]">
+				This reference is sealed into the public ledger entry for the experience.
+			</p>
 		</div>
 	</div>
 
@@ -523,6 +630,50 @@
 			onclick={handleVerifySubmit}
 		>
 			{verifying ? 'Verifying...' : 'Sign & Record to Ledger'}
+		</button>
+	{/snippet}
+</Modal>
+
+<!-- Modal: Send Back for Revision -->
+<Modal
+	bind:open={rejectModalOpen}
+	title={`Request Revision: ${selectedTaskToReject?.title || ''}`}
+>
+	<div class="space-y-4">
+		<p class="text-xs text-[#465A7A] leading-relaxed font-sans">
+			The task returns to <span class="font-mono font-bold text-[#D4831A]">IN_PROGRESS</span> for the
+			same youth. No payment is created until the resubmitted work is verified.
+		</p>
+
+		<div>
+			<label for="rejectReasonInput" class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]">
+				What needs to change? *
+			</label>
+			<textarea
+				id="rejectReasonInput"
+				rows="3"
+				bind:value={rejectReason}
+				placeholder="e.g. Please attach the signed delivery note and correct the invoice totals."
+				class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-sans"
+			></textarea>
+		</div>
+	</div>
+
+	{#snippet footer()}
+		<button
+			type="button"
+			class="cape-btn-secondary px-4 py-2 text-xs font-mono uppercase tracking-wider"
+			onclick={() => (rejectModalOpen = false)}
+		>
+			Cancel
+		</button>
+		<button
+			type="button"
+			disabled={rejecting}
+			class="bg-[#C49420] text-white px-5 py-2 text-xs font-mono uppercase tracking-widest font-bold hover:bg-[#a87c14] disabled:opacity-50"
+			onclick={handleRejectSubmit}
+		>
+			{rejecting ? 'Sending...' : 'Send Back for Revision'}
 		</button>
 	{/snippet}
 </Modal>

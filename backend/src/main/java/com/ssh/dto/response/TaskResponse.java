@@ -1,5 +1,7 @@
 package com.ssh.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.time.LocalDateTime;
 
 /**
@@ -51,6 +53,10 @@ public class TaskResponse {
     private Long assignedToId;
 
     private String assignedToName;
+
+    private String revisionReason;
+
+    private int revisionCount;
 
     private LocalDateTime createdAt;
 
@@ -128,10 +134,12 @@ public class TaskResponse {
         this.durationDays = durationDays;
     }
 
+    @JsonProperty("isPaid")
     public boolean isPaid() {
         return isPaid;
     }
 
+    @JsonProperty("isPaid")
     public void setPaid(boolean paid) {
         isPaid = paid;
     }
@@ -166,6 +174,22 @@ public class TaskResponse {
 
     public void setAssignedToName(String assignedToName) {
         this.assignedToName = assignedToName;
+    }
+
+    public String getRevisionReason() {
+        return revisionReason;
+    }
+
+    public void setRevisionReason(String revisionReason) {
+        this.revisionReason = revisionReason;
+    }
+
+    public int getRevisionCount() {
+        return revisionCount;
+    }
+
+    public void setRevisionCount(int revisionCount) {
+        this.revisionCount = revisionCount;
     }
 
     public LocalDateTime getCreatedAt() {

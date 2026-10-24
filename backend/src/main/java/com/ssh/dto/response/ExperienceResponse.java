@@ -1,5 +1,7 @@
 package com.ssh.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.time.LocalDateTime;
 
 /**
@@ -40,6 +42,10 @@ public class ExperienceResponse {
 
     private String youthName;
 
+    private String reference;
+
+    private String rejectionReason;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -52,7 +58,10 @@ public class ExperienceResponse {
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
 
+    @JsonProperty("isVerified")
     public boolean isVerified() { return isVerified; }
+
+    @JsonProperty("isVerified")
     public void setVerified(boolean verified) { isVerified = verified; }
 
     public String getFeedback() { return feedback; }
@@ -78,6 +87,12 @@ public class ExperienceResponse {
 
     public String getYouthName() { return youthName; }
     public void setYouthName(String youthName) { this.youthName = youthName; }
+
+    public String getReference() { return reference; }
+    public void setReference(String reference) { this.reference = reference; }
+
+    public String getRejectionReason() { return rejectionReason; }
+    public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

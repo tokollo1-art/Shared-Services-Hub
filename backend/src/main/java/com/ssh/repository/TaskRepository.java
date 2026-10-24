@@ -57,6 +57,12 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByAssignedTo(Youth youth);
 
     /**
+     * Count tasks in a given status assigned to a youth.
+     * Used to count active reservations (IN_PROGRESS work).
+     */
+    long countByAssignedToAndStatus(Youth youth, String status);
+
+    /**
      * Find all tasks in a specific category.
      * Categories: ADMIN, TECH, DESIGN, MARKETING, FINANCE, OPERATIONS.
      * Used for filtering and reporting.

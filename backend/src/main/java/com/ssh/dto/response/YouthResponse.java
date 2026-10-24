@@ -1,5 +1,7 @@
 package com.ssh.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.time.LocalDateTime;
 
 /**
@@ -143,10 +145,12 @@ public class YouthResponse {
         this.availability = availability;
     }
 
+    @JsonProperty("isAlumni")
     public boolean isAlumni() {
         return isAlumni;
     }
 
+    @JsonProperty("isAlumni")
     public void setAlumni(boolean alumni) {
         isAlumni = alumni;
     }

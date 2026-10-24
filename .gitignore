@@ -70,3 +70,6 @@ desktop.ini
 *.p12
 *.jks
 secrets/
+
+# =========== FILES ================
+tshepiso_tasks

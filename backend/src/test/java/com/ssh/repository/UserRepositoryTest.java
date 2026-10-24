@@ -109,8 +109,16 @@ class UserRepositoryTest {
             List<User> smes = userRepository.findByRole("SME");
 
             // Then
-            assertThat(youth).hasSize(2);
-            assertThat(smes).hasSize(1);
+            // The suite runs against the shared dev database, so assert on the
+            // users created here instead of total table counts.
+            assertThat(youth)
+                .extracting(User::getEmail)
+                .contains("thandi@ssh.co.za", "sipho@ssh.co.za")
+                .doesNotContain("zanele@ssh.co.za");
+            assertThat(smes)
+                .extracting(User::getEmail)
+                .contains("zanele@ssh.co.za")
+                .doesNotContain("thandi@ssh.co.za", "sipho@ssh.co.za");
         }
     }
 
@@ -136,8 +144,12 @@ class UserRepositoryTest {
             List<User> activeUsers = userRepository.findByIsActiveTrue();
 
             // Then
-            assertThat(activeUsers).hasSize(1);
-            assertThat(activeUsers.get(0).getEmail()).isEqualTo("thandi@ssh.co.za");
+            // The suite runs against the shared dev database, so assert on the
+            // users created here instead of total table counts.
+            assertThat(activeUsers)
+                .extracting(User::getEmail)
+                .contains("thandi@ssh.co.za")
+                .doesNotContain("sipho@ssh.co.za");
         }
     }
 }

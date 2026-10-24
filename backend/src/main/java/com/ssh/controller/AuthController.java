@@ -4,6 +4,7 @@ import com.ssh.dto.request.LoginRequest;
 import com.ssh.dto.request.RegisterRequest;
 import com.ssh.dto.response.ApiResponse;
 import com.ssh.dto.response.AuthResponse;
+import com.ssh.exception.InvalidCredentialsException;
 import com.ssh.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -59,11 +60,18 @@ public class AuthController {
     /**
      * Login with email and password.
      * Returns a JWT and the user's profile.
+     *
+     * The body is optional on purpose: a request without credentials is an
+     * authentication failure (401 Unauthorized), not a malformed request.
      */
     @PostMapping("/login")
     @Operation(summary = "Authenticate and receive a JWT")
     public ResponseEntity<ApiResponse<AuthResponse>> login(
-        @Valid @RequestBody LoginRequest request) {
+        @Valid @RequestBody(required = false) LoginRequest request) {
+
+        if (request == null) {
+            throw new InvalidCredentialsException("Email and password are required");
+        }
 
         AuthResponse authResponse = authService.login(request);
 

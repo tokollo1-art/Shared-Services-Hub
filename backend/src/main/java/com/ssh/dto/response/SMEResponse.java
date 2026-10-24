@@ -1,5 +1,7 @@
 package com.ssh.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import lombok.Getter;
 import lombok.Setter;
 
@@ -73,6 +75,11 @@ public class SMEResponse {
     // ============================================
     // GETTERS AND SETTERS
     // ============================================
+
+    @JsonProperty("isVerified")
+    public boolean isVerified() {
+        return isVerified;
+    }
 
     // ============================================
     // TO STRING

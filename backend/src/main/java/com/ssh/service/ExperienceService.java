@@ -4,127 +4,123 @@ import com.ssh.dto.response.ExperienceResponse;
 import com.ssh.entity.Experience;
 import com.ssh.entity.Task;
 import com.ssh.entity.Youth;
+import com.ssh.exception.BusinessRuleException;
 import com.ssh.exception.ResourceNotFoundException;
 import com.ssh.repository.ExperienceRepository;
-import com.ssh.repository.TaskRepository;
 import com.ssh.repository.YouthRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Experience Service
+ * Experience Ledger records.
  *
- * Purpose: Business logic for the Experience Ledger.
- *
- * WHY SSH needs this service:
- *   - Every verified task completion becomes a permanent experience record
- *   - Youth can see their full verified work history
- *   - SMEs verify the work to make the record trusted
- *   - This is SSH's core differentiator from a job board
- *
- * @author SSH Team
- * @version 1.0
- * @since 2026
+ * A completion creates exactly one Experience per task. Revision cycles reuse
+ * that same row, so a task can never accumulate duplicate experience records.
  */
 @Service
 public class ExperienceService {
 
     private final ExperienceRepository experienceRepository;
-    private final TaskRepository taskRepository;
     private final YouthRepository youthRepository;
 
     public ExperienceService(ExperienceRepository experienceRepository,
-                             TaskRepository taskRepository,
                              YouthRepository youthRepository) {
         this.experienceRepository = experienceRepository;
-        this.taskRepository = taskRepository;
         this.youthRepository = youthRepository;
     }
 
     /**
-     * Create a new experience record when a task is completed.
-     * Called by TaskService when a youth marks a task complete.
+     * Called inside the completion transaction. Creates the experience on the
+     * first completion and re-opens the existing one after a revision.
      */
     @Transactional
-    public ExperienceResponse createExperience(Long taskId) {
-        Task task = taskRepository.findById(taskId)
-            .orElseThrow(() -> new ResourceNotFoundException("Task", taskId));
-
-        if (task.getAssignedTo() == null) {
-            throw new IllegalStateException(
-                "Cannot create an experience for a task with no assigned youth");
+    public Experience recordCompletion(Task task, Youth youth) {
+        if (task == null || task.getId() == null) {
+            throw new IllegalArgumentException("A persisted task is required");
+        }
+        if (youth == null) {
+            throw new IllegalArgumentException("An assigned youth is required");
         }
 
-        Youth youth = task.getAssignedTo();
+        Experience experience = experienceRepository.findFirstByTask(task).orElse(null);
+        if (experience != null) {
+            if (experience.isVerified()) {
+                throw new BusinessRuleException(
+                    "This task already has a verified experience and cannot be submitted again");
+            }
+            experience.resubmit();
+            return experienceRepository.save(experience);
+        }
 
-        Experience experience = new Experience(youth, task);
-        Experience saved = experienceRepository.save(experience);
-
-        return toExperienceResponse(saved);
+        Experience created = new Experience(youth, task);
+        created.setStartDate(LocalDateTime.now());
+        return experienceRepository.save(created);
     }
 
     /**
-     * Verify an experience. Called by the SME who owns the task.
-     * Sets isVerified=true, records the timestamp, and stores feedback/rating.
+     * Marks the existing experience REJECTED with the SME's reason. A task
+     * completed before this feature existed may not have an experience yet;
+     * in that case there is nothing to reject.
      */
     @Transactional
-    public ExperienceResponse verifyExperience(Long experienceId,
-                                               String feedback,
-                                               Double rating) {
-        Experience experience = experienceRepository.findById(experienceId)
+    public void rejectForRevision(Task task, String reason) {
+        experienceRepository.findFirstByTask(task).ifPresent(experience -> {
+            experience.reject(reason);
+            experienceRepository.save(experience);
+        });
+    }
+
+    /**
+     * The single experience for a completed task.
+     */
+    public Experience requireForTask(Task task) {
+        return experienceRepository.findFirstByTask(task)
+            .orElseThrow(() -> new BusinessRuleException(
+                "No completion record exists for task " + task.getId()
+                    + "; the youth must complete it first"));
+    }
+
+    public Experience requireExperience(Long experienceId) {
+        return experienceRepository.findById(experienceId)
             .orElseThrow(() -> new ResourceNotFoundException("Experience", experienceId));
-
-        if (experience.isVerified()) {
-            throw new IllegalStateException("Experience already verified");
-        }
-
-        experience.verify(feedback, rating);
-        Experience saved = experienceRepository.save(experience);
-
-        return toExperienceResponse(saved);
     }
 
-    /**
-     * List all experiences for a given youth.
-     * This is the Experience Ledger.
-     */
+    @Transactional
+    public Experience save(Experience experience) {
+        return experienceRepository.save(experience);
+    }
+
     public List<ExperienceResponse> listExperiencesForYouth(Long youthId) {
         Youth youth = youthRepository.findById(youthId)
             .orElseThrow(() -> new ResourceNotFoundException("Youth", youthId));
 
         return experienceRepository.findByYouth(youth)
             .stream()
-            .map(this::toExperienceResponse)
+            .map(this::toResponse)
             .collect(Collectors.toList());
     }
 
-    /**
-     * Get a single experience by ID.
-     */
     public ExperienceResponse getExperienceById(Long id) {
-        Experience experience = experienceRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Experience", id));
-        return toExperienceResponse(experience);
+        return toResponse(requireExperience(id));
     }
 
-    /**
-     * Convert an Experience entity to a safe DTO.
-     */
-    private ExperienceResponse toExperienceResponse(Experience experience) {
+    public ExperienceResponse toResponse(Experience experience) {
         ExperienceResponse response = new ExperienceResponse();
         response.setId(experience.getId());
         response.setStatus(experience.getStatus());
         response.setVerified(experience.isVerified());
         response.setFeedback(experience.getFeedback());
         response.setRating(experience.getRating());
+        response.setReference(experience.getReference());
+        response.setRejectionReason(experience.getRejectionReason());
         response.setVerifiedAt(experience.getVerifiedAt());
         response.setCreatedAt(experience.getCreatedAt());
         response.setUpdatedAt(experience.getUpdatedAt());
 
-        // Task summary
         if (experience.getTask() != null) {
             response.setTaskId(experience.getTask().getId());
             response.setTaskTitle(experience.getTask().getTitle());
@@ -133,7 +129,6 @@ public class ExperienceService {
             }
         }
 
-        // Youth summary
         if (experience.getYouth() != null) {
             response.setYouthId(experience.getYouth().getId());
             response.setYouthName(experience.getYouth().getUser().getName());

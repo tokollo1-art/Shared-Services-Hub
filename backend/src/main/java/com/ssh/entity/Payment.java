@@ -149,8 +149,12 @@ public class Payment {
             return;
         }
         double feePercent = platformFeePercent != null ? platformFeePercent : 10.0;
-        this.platformFee = this.totalAmount * (feePercent / 100.0);
-        this.youthAmount = this.totalAmount - this.platformFee;
+        this.platformFee = round(this.totalAmount * (feePercent / 100.0));
+        this.youthAmount = round(this.totalAmount - this.platformFee);
+    }
+
+    private static double round(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
     /**

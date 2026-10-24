@@ -33,6 +33,23 @@ import java.util.List;
 public interface ExperienceRepository extends JpaRepository<Experience, Long> {
 
     /**
+     * Find the single experience linked to a task.
+     * The database enforces one experience per task.
+     */
+    java.util.Optional<Experience> findFirstByTask(Task task);
+
+    /**
+     * Whether a completion record already exists for a task.
+     */
+    boolean existsByTask(Task task);
+
+    /**
+     * Count only VERIFIED experiences for a youth. This is the sole input to
+     * tier eligibility: pending, rejected or in-progress work never counts.
+     */
+    long countByYouthAndIsVerifiedTrue(Youth youth);
+
+    /**
      * Find all experiences recorded for a specific youth.
      * This is the youth's Experience Ledger.
      */

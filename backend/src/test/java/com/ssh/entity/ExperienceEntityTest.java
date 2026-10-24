@@ -98,7 +98,7 @@ class ExperienceEntityTest {
             Experience experience = new Experience(youth, task);
 
             // When
-            experience.verify("Excellent work, delivered on time", 4.8);
+            experience.verify("Excellent work, delivered on time", 4.8, "https://portfolio.example.com/logo");
 
             // Then
             assertThat(experience.isVerified()).isTrue();
@@ -106,6 +106,7 @@ class ExperienceEntityTest {
             assertThat(experience.getVerifiedAt()).isNotNull();
             assertThat(experience.getFeedback()).isEqualTo("Excellent work, delivered on time");
             assertThat(experience.getRating()).isEqualTo(4.8);
+            assertThat(experience.getReference()).isEqualTo("https://portfolio.example.com/logo");
         }
     }
 

@@ -29,7 +29,13 @@ import java.time.LocalDateTime;
  * @since 2026
  */
 @Entity
-@Table(name = "experiences")
+@Table(
+    name = "experiences",
+    uniqueConstraints = @UniqueConstraint(
+        name = "uk_experience_task",
+        columnNames = "task_id"
+    )
+)
 public class Experience {
 
     @Id
@@ -75,6 +81,22 @@ public class Experience {
 
     @Column
     private Double rating;
+
+    /**
+     * A concrete artefact or reference the SME checked when verifying
+     * (for example a portfolio URL, delivery note number or file reference).
+     * Required on verification.
+     */
+    @Size(max = 255)
+    @Column(length = 255)
+    private String reference;
+
+    /**
+     * The SME's latest revision request. Null once the work is verified.
+     */
+    @Size(max = 1000)
+    @Column(name = "rejection_reason", length = 1000)
+    private String rejectionReason;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -196,6 +218,22 @@ public class Experience {
         this.rating = rating;
     }
 
+    public String getReference() {
+        return reference;
+    }
+
+    public void setReference(String reference) {
+        this.reference = reference;
+    }
+
+    public String getRejectionReason() {
+        return rejectionReason;
+    }
+
+    public void setRejectionReason(String rejectionReason) {
+        this.rejectionReason = rejectionReason;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -218,14 +256,42 @@ public class Experience {
 
     /**
      * Marks this experience as verified by the SME.
-     * Sets verifiedAt and status.
+     * Sets verifiedAt and status, and stores the mandatory evidence reference.
      */
-    public void verify(String feedback, Double rating) {
+    public void verify(String feedback, Double rating, String reference) {
         this.isVerified = true;
         this.verifiedAt = LocalDateTime.now();
         this.status = "VERIFIED";
         this.feedback = feedback;
         this.rating = rating;
+        this.reference = reference;
+        this.rejectionReason = null;
+        if (this.endDate == null) {
+            this.endDate = this.verifiedAt;
+        }
+    }
+
+    /**
+     * Marks the experience as rejected and records the SME's revision reason.
+     */
+    public void reject(String reason) {
+        this.isVerified = false;
+        this.verifiedAt = null;
+        this.status = "REJECTED";
+        this.rejectionReason = reason;
+    }
+
+    /**
+     * Re-opens the same experience when the youth resubmits. Reusing the row
+     * guarantees one experience per task even after revision cycles.
+     */
+    public void resubmit() {
+        this.isVerified = false;
+        this.verifiedAt = null;
+        this.status = "PENDING";
+        this.feedback = null;
+        this.rating = null;
+        this.reference = null;
     }
 
     // ============================================
@@ -239,6 +305,7 @@ public class Experience {
             ", status='" + status + '\'' +
             ", isVerified=" + isVerified +
             ", rating=" + rating +
+            ", reference='" + reference + '\'' +
             '}';
     }
 }
