@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.venv/
+ssh_ai_service.egg-info/
