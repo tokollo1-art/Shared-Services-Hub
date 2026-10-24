@@ -10,23 +10,11 @@ import java.util.List;
 
 /**
  * Experience Repository
+ *
  * Purpose: Database access for Experience entities (the Experience Ledger).
- * WHY SSH needs this repository:
- *   - Find experiences by youth (the experience ledger)
- *   - Find experiences by task
- *   - Find pending (unverified) experiences for SME review
- *   - Find verified experiences for impact reporting
- * TODO: Add method to count verified experiences per youth
- * TODO: Add method to find experiences in a date range
- * TODO: Add custom query for average rating
- * TDD: Write ExperienceRepositoryTest first
- *       - shouldFindExperiences_ByYouth()
- *       - shouldFindExperiences_ByTask()
- *       - shouldFindVerifiedExperiences()
- *       - shouldFindPendingExperiences()
  *
  * @author SSH Team
- * @version 1.0
+ * @version 1.1
  * @since 2026
  */
 @Repository
@@ -55,31 +43,23 @@ public interface ExperienceRepository extends JpaRepository<Experience, Long> {
      */
     List<Experience> findByYouth(Youth youth);
 
-    /**
-     * Find all experiences linked to a specific task.
-     * Used when an SME wants to check the experience tied to a task.
-     */
     List<Experience> findByTask(Task task);
 
-    /**
-     * Find all verified experiences.
-     * Used for impact reporting (verified work records only).
-     */
     List<Experience> findByIsVerifiedTrue();
 
-    /**
-     * Find all unverified experiences.
-     * Used for the SME dashboard to show tasks awaiting verification.
-     */
     List<Experience> findByIsVerifiedFalse();
 
-    /**
-     * Find experiences by status.
-     * Statuses: PENDING, IN_PROGRESS, COMPLETED, VERIFIED, REJECTED.
-     */
     List<Experience> findByStatus(String status);
 
-    // TODO: Add long countByYouthAndIsVerifiedTrue(Youth youth);
-    // TODO: Add @Query("SELECT AVG(e.rating) FROM Experience e WHERE e.task.sme = :sme")
-    //       Double findAverageRatingForSme(SME sme);
+    /**
+     * Count a youth's verified experiences.
+     * Used by AgentService to compute the youth's tier.
+     */
+    long countByYouthIdAndIsVerifiedTrue(Long youthId);
+
+    /**
+     * Count a youth's unverified experiences.
+     * Used by AgentService to populate awaitingVerificationCount.
+     */
+    long countByYouthIdAndIsVerifiedFalse(Long youthId);
 }

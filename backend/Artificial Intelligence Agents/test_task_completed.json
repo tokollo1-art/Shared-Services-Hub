@@ -1,0 +1,9 @@
+{
+  "eventId": "22222222-2222-2222-2222-222222222222",
+  "occurredAt": "2026-10-23T11:00:00Z",
+  "type": "TASK_COMPLETED",
+  "taskId": 1,
+  "youthId": 4,
+  "smeId": 9,
+  "reflection": "I counted all the stock and reconciled the till. Found three items missing from the shelf and reported them to the owner."
+}

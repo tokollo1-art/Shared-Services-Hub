@@ -12,25 +12,12 @@ import java.util.List;
  * Purpose: Represents a youth program alumni in SSH.
  *          Youth complete tasks, earn income, and build the Experience Ledger.
  *
- * WHY SSH needs this entity:
- *   - Youth are the beneficiaries of the platform
- *   - They complete tasks posted by SMEs
- *   - They build verified experience through the Experience Ledger
- *   - They exit only when permanently placed (become alumni)
- *
- * TODO: Add @JsonIgnore to experiences and tasks fields to prevent circular reference
- * TODO: Add method to calculate total verified experience
- * TODO: Add method to calculate total income earned
- * TODO: Add method to check if youth is ready for alumni status
- *
- * TDD: Write YouthEntityTest first
- *       - shouldHaveNoViolations_ForValidYouth()
- *       - shouldBeActive_ByDefault()
- *       - shouldBecomeAlumni_WhenMarkedAsPlaced()
- *       - shouldAddExperience_ToExperienceList()
+ * Slot 2 changes:
+ *   - Added ledgerCode (String, unique) — the shareable public ledger URL
+ *   - Added ledgerShareEnabled (boolean) — opt-in for the public page
  *
  * @author SSH Team
- * @version 1.0
+ * @version 1.1
  * @since 2026
  */
 @Entity
@@ -41,10 +28,6 @@ public class Youth {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /**
-     * One-to-One relationship with User.
-     * Every Youth has exactly one User account for authentication.
-     */
     @OneToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
@@ -70,31 +53,33 @@ public class Youth {
     @Column(length = 50)
     private String availability;
 
-    /**
-     * Whether the youth has been permanently placed.
-     * When true, the youth becomes an SSH Alumni and exits the hub.
-     */
     @Column(name = "is_alumni")
     private boolean isAlumni = false;
 
-    /**
-     * The date the youth became an alumni (permanently placed).
-     * Set only when isAlumni is true.
-     */
     @Column(name = "alumni_date")
     private LocalDateTime alumniDate;
 
     /**
-     * One-to-Many relationship with Experience.
-     * One youth can have many verified experiences.
+     * Unguessable, stable code that identifies this youth's public ledger.
+     * Generated once on first use. Used in the shareable URL
+     * /api/v1/public/ledger/{code}.
+     * Contains no PII — it is not derived from the youth's name or ID.
      */
+    @Size(max = 32)
+    @Column(name = "ledger_code", unique = true, length = 32)
+    private String ledgerCode;
+
+    /**
+     * Whether the youth has opted in to the public ledger page.
+     * When false, /api/v1/public/ledger/{code} returns 404.
+     * Defaults to false — sharing is opt-in.
+     */
+    @Column(name = "ledger_share_enabled")
+    private boolean ledgerShareEnabled = false;
+
     @OneToMany(mappedBy = "youth", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Experience> experiences = new ArrayList<>();
 
-    /**
-     * One-to-Many relationship with Task.
-     * One youth can be assigned many tasks over time.
-     */
     @OneToMany(mappedBy = "assignedTo")
     private List<Task> tasks = new ArrayList<>();
 
@@ -214,6 +199,22 @@ public class Youth {
         this.alumniDate = alumniDate;
     }
 
+    public String getLedgerCode() {
+        return ledgerCode;
+    }
+
+    public void setLedgerCode(String ledgerCode) {
+        this.ledgerCode = ledgerCode;
+    }
+
+    public boolean isLedgerShareEnabled() {
+        return ledgerShareEnabled;
+    }
+
+    public void setLedgerShareEnabled(boolean ledgerShareEnabled) {
+        this.ledgerShareEnabled = ledgerShareEnabled;
+    }
+
     public List<Experience> getExperiences() {
         return experiences;
     }
@@ -250,26 +251,16 @@ public class Youth {
     // HELPER METHODS
     // ============================================
 
-    /**
-     * Adds an experience to this youth's experience list.
-     */
     public void addExperience(Experience experience) {
         experiences.add(experience);
         experience.setYouth(this);
     }
 
-    /**
-     * Removes an experience from this youth's experience list.
-     */
     public void removeExperience(Experience experience) {
         experiences.remove(experience);
         experience.setYouth(null);
     }
 
-    /**
-     * Marks this youth as an alumni (permanently placed).
-     * Called when the youth secures permanent employment.
-     */
     public void markAsAlumni() {
         this.isAlumni = true;
         this.alumniDate = LocalDateTime.now();
@@ -286,6 +277,7 @@ public class Youth {
             ", location='" + location + '\'' +
             ", isAlumni=" + isAlumni +
             ", alumniDate=" + alumniDate +
+            ", ledgerShareEnabled=" + ledgerShareEnabled +
             '}';
     }
 }

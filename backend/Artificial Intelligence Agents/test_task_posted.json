@@ -1,0 +1,16 @@
+{
+  "eventId": "11111111-1111-1111-1111-111111111111",
+  "occurredAt": "2026-10-23T10:00:00Z",
+  "type": "TASK_POSTED",
+  "task": {
+    "id": 1,
+    "title": "Stock take at spaza shop",
+    "description": "Count and reconcile inventory",
+    "tier": 1,
+    "requiredSkills": ["inventory coordination", "stock taking"],
+    "remote": false,
+    "estHours": 4,
+    "smeId": 9,
+    "reservedUntil": null
+  }
+}

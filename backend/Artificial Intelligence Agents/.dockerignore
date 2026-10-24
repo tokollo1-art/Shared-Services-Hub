@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.*
+!.env.example
+events.sqlite
+data/
+.git/
+.gitignore
+README.md
+Dockerfile
+.dockerignore

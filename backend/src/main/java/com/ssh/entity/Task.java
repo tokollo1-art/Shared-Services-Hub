@@ -15,6 +15,15 @@ import java.time.LocalDateTime;
  *   - Youth complete tasks and earn income
  *   - Verified tasks become entries in the Experience Ledger
  *   - Tasks drive payment calculations
+ *
+ * Slot 2 changes:
+ *   - Added tier (int) — Slot 1 tier rules, youth feed, matchmaker
+ *   - Added reservedUntil (timestamp) — Tier 0 window, widening job
+ *   - Added remote (boolean) — feed filter, eligibility
+ *   - Added location (string) — distance bucket for matchmaker
+ *   - Added estHours (double) — required by Python's TaskPayload
+ *
+ * TODO: Add status enum (OPEN, IN_PROGRESS, COMPLETED, VERIFIED, CANCELLED)
  * TODO: Add category enum (ADMIN, TECH, DESIGN, MARKETING, etc.)
  * TODO: Add method to check if task is expired
  * TODO: Add relationship to Payment entity (1:1)
@@ -26,7 +35,7 @@ import java.time.LocalDateTime;
  *       - shouldNotBeAssigned_WhenAlreadyAssigned()
  *
  * @author SSH Team
- * @version 1.0
+ * @version 1.2
  * @since 2026
  */
 @Entity
@@ -69,7 +78,8 @@ public class Task {
     @NotBlank(message = "Status is required")
     @Size(max = 20)
     @Column(nullable = false, length = 20)
-    private String status = "OPEN"; // See TaskStatus for the allowed lifecycle
+    private String status = "OPEN";
+     // See TaskStatus for the allowed lifecycle
 
     @Column
     private Double budget;
@@ -93,6 +103,42 @@ public class Task {
      */
     @Column(name = "revision_count", nullable = false)
     private int revisionCount = 0;
+
+    /**
+     * Tier of the task.
+     * 0 = entry level (reserved window for new youth)
+     * 1 = intermediate
+     * 2 = advanced
+     */
+    @Column(name = "tier")
+    private Integer tier;
+
+    /**
+     * When the Tier 0 reservation window ends.
+     * After this timestamp, an unclaimed Tier 0 task is widened to Tier 1.
+     */
+    @Column(name = "reserved_until")
+    private LocalDateTime reservedUntil;
+
+    /**
+     * Whether the task can be done remotely.
+     */
+    @Column(name = "remote")
+    private boolean remote = false;
+
+    /**
+     * Location of the task. Free text for now.
+     */
+    @Size(max = 100)
+    @Column(name = "location", length = 100)
+    private String location;
+
+    /**
+     * Estimated hours to complete the task.
+     * Required by Python's TaskPayload (est_hours: float, must be > 0).
+     */
+    @Column(name = "est_hours")
+    private Double estHours;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -302,6 +348,46 @@ public class Task {
         isPaid = paid;
     }
 
+    public Integer getTier() {
+        return tier;
+    }
+
+    public void setTier(Integer tier) {
+        this.tier = tier;
+    }
+
+    public LocalDateTime getReservedUntil() {
+        return reservedUntil;
+    }
+
+    public void setReservedUntil(LocalDateTime reservedUntil) {
+        this.reservedUntil = reservedUntil;
+    }
+
+    public boolean isRemote() {
+        return remote;
+    }
+
+    public void setRemote(boolean remote) {
+        this.remote = remote;
+    }
+
+    public String getLocation() {
+        return location;
+    }
+
+    public void setLocation(String location) {
+        this.location = location;
+    }
+
+    public Double getEstHours() {
+        return estHours;
+    }
+
+    public void setEstHours(Double estHours) {
+        this.estHours = estHours;
+    }
+
     public String getRevisionReason() {
         return revisionReason;
     }
@@ -345,6 +431,10 @@ public class Task {
             ", title='" + title + '\'' +
             ", category='" + category + '\'' +
             ", status='" + status + '\'' +
+            ", tier=" + tier +
+            ", remote=" + remote +
+            ", location='" + location + '\'' +
+            ", estHours=" + estHours +
             ", budget=" + budget +
             '}';
     }

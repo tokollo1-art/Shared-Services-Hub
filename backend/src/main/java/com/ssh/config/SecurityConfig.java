@@ -23,12 +23,17 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *
  * WHY SSH needs this:
  *   - JWT-based stateless authentication (no sessions)
- *   - Role-based access control (Youth, SME, Corporate, Admin)
+ *   - Role-based access control (Youth, SME, Corporate, Admin, Agent)
  *   - BCrypt password hashing
- *   - Public access to auth endpoints and Swagger
+ *   - Public access to auth endpoints, the public ledger, and Swagger
+ *
+ * Slot 2 changes:
+ *   - Added /api/v1/agent/** restricted to ROLE_AGENT (the AI service)
+ *   - Added /api/v1/public/** as permitAll (the public ledger page)
+ *   - Added /actuator/health as permitAll (container healthcheck)
  *
  * @author SSH Team
- * @version 1.0
+ * @version 1.1
  * @since 2026
  */
 @Configuration
@@ -68,9 +73,14 @@ public class SecurityConfig {
                 .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
                 // Public endpoints
                 .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers("/api/v1/public/**").permitAll()
                 .requestMatchers("/swagger-ui/**").permitAll()
                 .requestMatchers("/swagger-ui.html").permitAll()
                 .requestMatchers("/v3/api-docs/**").permitAll()
+                .requestMatchers("/actuator/health").permitAll()
+
+                // Agent endpoints — the AI service identity only
+                .requestMatchers("/api/v1/agent/**").hasRole("AGENT")
                 // The public verification ledger is readable without a token
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/ledger/**").permitAll()
 
