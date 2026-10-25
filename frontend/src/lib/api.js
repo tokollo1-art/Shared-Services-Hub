@@ -1,20 +1,143 @@
+
 import { browser } from '$app/environment';
 import { auth, TOKEN_KEY } from '$lib/stores/auth.js';
 import { toast } from '$lib/stores/toast.js';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const API_BASE_URL =
+	import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 // In-browser mock fallback data for offline / demo preview
 const MOCK_STORAGE_KEY = 'ssh_mock_db_v1';
 
+// Separate storage for user profiles
+const PROFILE_STORAGE_KEY = 'ssh_profiles_v1';
+
+/* =========================================
+   PROFILE STORAGE HELPERS
+========================================= */
+
+// Get the current user from the auth store when needed.
+// This supports Svelte stores and avoids requiring a backend.
+function getCurrentUser() {
+	if (!browser) return null;
+
+	let currentUser = null;
+
+	const unsubscribe = auth.subscribe((value) => {
+		currentUser = value?.user ?? value ?? null;
+	});
+
+	unsubscribe();
+
+	return currentUser;
+}
+
+function getProfileUserKey(user) {
+	const email = user?.email?.trim().toLowerCase();
+
+	if (email) {
+		return `email:${email}`;
+	}
+
+	if (user?.id != null) {
+		return `id:${user.id}`;
+	}
+
+	throw new Error(
+		'Cannot identify the logged-in user. Please log in again.'
+	);
+}
+
+function readSavedProfiles() {
+	if (!browser) {
+		throw new Error('Browser storage is unavailable.');
+	}
+
+	try {
+		const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
+		const profiles = saved ? JSON.parse(saved) : {};
+
+		if (
+			!profiles ||
+			typeof profiles !== 'object' ||
+			Array.isArray(profiles)
+		) {
+			throw new Error('Invalid profile storage format.');
+		}
+
+		return profiles;
+	} catch {
+		throw new Error(
+			'Could not read saved profiles from browser storage.'
+		);
+	}
+}
+
+function getLocalProfile(user) {
+	const resolvedUser = user ?? getCurrentUser();
+	const key = getProfileUserKey(resolvedUser);
+	const profiles = readSavedProfiles();
+
+	if (!profiles[key]) {
+		return {
+			hasExistingProfile: false
+		};
+	}
+
+	return {
+		...profiles[key],
+		hasExistingProfile: true
+	};
+}
+
+function saveLocalProfile(profileData, user) {
+	if (!browser) {
+		throw new Error('Browser storage is unavailable.');
+	}
+
+	const resolvedUser = user ?? getCurrentUser();
+	const key = getProfileUserKey(resolvedUser);
+	const profiles = readSavedProfiles();
+	const previousProfile = profiles[key] || {};
+
+	const savedProfile = {
+		...previousProfile,
+		...profileData,
+		profileId: previousProfile.profileId || key,
+		hasExistingProfile: true,
+		updatedAt: new Date().toISOString()
+	};
+
+	try {
+		profiles[key] = savedProfile;
+
+		localStorage.setItem(
+			PROFILE_STORAGE_KEY,
+			JSON.stringify(profiles)
+		);
+	} catch {
+		throw new Error(
+			'Could not save the profile. Check browser storage availability.'
+		);
+	}
+
+	return savedProfile;
+}
+
+/* =========================================
+   MOCK DATABASE
+========================================= */
+
 function getMockDb() {
 	if (!browser) return null;
+
 	const existing = localStorage.getItem(MOCK_STORAGE_KEY);
+
 	if (existing) {
 		try {
 			return JSON.parse(existing);
 		} catch (e) {
-			// reset if corrupted
+			// Reset if corrupted
 		}
 	}
 
@@ -23,7 +146,8 @@ function getMockDb() {
 			{
 				id: 1,
 				title: 'E-commerce Product Catalog Digitization',
-				description: 'Digitize 150 local artisan products with high-res photos, descriptions, and SKU tagging for Shopify store.',
+				description:
+					'Digitize 150 local artisan products with high-res photos, descriptions, and SKU tagging for Shopify store.',
 				category: 'Digital Operations',
 				status: 'OPEN',
 				budget: 1200.0,
@@ -33,13 +157,18 @@ function getMockDb() {
 				smeBusinessName: 'Kasi Craftworks Co.',
 				assignedToId: null,
 				assignedToName: null,
-				createdAt: new Date(Date.now() - 3600000 * 24 * 3).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 3).toISOString()
+				createdAt: new Date(
+					Date.now() - 3600000 * 24 * 3
+				).toISOString(),
+				updatedAt: new Date(
+					Date.now() - 3600000 * 24 * 3
+				).toISOString()
 			},
 			{
 				id: 2,
 				title: 'Social Media Campaign & Content Creation',
-				description: 'Design 12 branded Canva posts and schedule 3 reels promoting our spring collection in Gauteng.',
+				description:
+					'Design 12 branded Canva posts and schedule 3 reels promoting our spring collection in Gauteng.',
 				category: 'Marketing & Creative',
 				status: 'IN_PROGRESS',
 				budget: 850.0,
@@ -49,13 +178,18 @@ function getMockDb() {
 				smeBusinessName: 'Ubuntu Organic Foods',
 				assignedToId: 1,
 				assignedToName: 'Thabo Mokoena',
-				createdAt: new Date(Date.now() - 3600000 * 24 * 5).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 1).toISOString()
+				createdAt: new Date(
+					Date.now() - 3600000 * 24 * 5
+				).toISOString(),
+				updatedAt: new Date(
+					Date.now() - 3600000 * 24
+				).toISOString()
 			},
 			{
 				id: 3,
 				title: 'Financial Records Reconciliation & Invoicing',
-				description: 'Reconcile 3 months of bank statements and configure invoice templates in Sage Cloud Accounting.',
+				description:
+					'Reconcile 3 months of bank statements and configure invoice templates in Sage Cloud Accounting.',
 				category: 'Accounting & Finance',
 				status: 'COMPLETED',
 				budget: 1500.0,
@@ -65,13 +199,18 @@ function getMockDb() {
 				smeBusinessName: 'Lindiwe Logistics',
 				assignedToId: 1,
 				assignedToName: 'Thabo Mokoena',
-				createdAt: new Date(Date.now() - 3600000 * 24 * 10).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 2).toISOString()
+				createdAt: new Date(
+					Date.now() - 3600000 * 24 * 10
+				).toISOString(),
+				updatedAt: new Date(
+					Date.now() - 3600000 * 24 * 2
+				).toISOString()
 			},
 			{
 				id: 4,
 				title: 'Customer Onboarding & Verification Calls',
-				description: 'Conduct 40 outbound calls to verify delivery addresses and update customer satisfaction notes in CRM.',
+				description:
+					'Conduct 40 outbound calls to verify delivery addresses and update customer satisfaction notes in CRM.',
 				category: 'Customer Support',
 				status: 'VERIFIED',
 				budget: 700.0,
@@ -81,13 +220,18 @@ function getMockDb() {
 				smeBusinessName: 'Kasi Craftworks Co.',
 				assignedToId: 1,
 				assignedToName: 'Thabo Mokoena',
-				createdAt: new Date(Date.now() - 3600000 * 24 * 14).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 4).toISOString()
+				createdAt: new Date(
+					Date.now() - 3600000 * 24 * 14
+				).toISOString(),
+				updatedAt: new Date(
+					Date.now() - 3600000 * 24 * 4
+				).toISOString()
 			},
 			{
 				id: 5,
 				title: 'POS Hardware Setup & Inventory Audit',
-				description: 'Setup Yoco payment terminals at 2 pop-up stalls and conduct physical stock count.',
+				description:
+					'Setup Yoco payment terminals at 2 pop-up stalls and conduct physical stock count.',
 				category: 'IT & Technical',
 				status: 'OPEN',
 				budget: 950.0,
@@ -97,8 +241,12 @@ function getMockDb() {
 				smeBusinessName: 'Soweto Solar Solutions',
 				assignedToId: null,
 				assignedToName: null,
-				createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 12).toISOString()
+				createdAt: new Date(
+					Date.now() - 3600000 * 12
+				).toISOString(),
+				updatedAt: new Date(
+					Date.now() - 3600000 * 12
+				).toISOString()
 			}
 		],
 		experiences: [
@@ -106,16 +254,23 @@ function getMockDb() {
 				id: 1,
 				status: 'VERIFIED',
 				isVerified: true,
-				feedback: 'Thabo showed exceptional attention to detail and completed customer verification ahead of schedule. Excellent communication skills.',
+				feedback:
+					'Thabo showed exceptional attention to detail and completed customer verification ahead of schedule. Excellent communication skills.',
 				rating: 4.8,
-				verifiedAt: new Date(Date.now() - 3600000 * 24 * 4).toISOString(),
+				verifiedAt: new Date(
+					Date.now() - 3600000 * 24 * 4
+				).toISOString(),
 				taskId: 4,
 				taskTitle: 'Customer Onboarding & Verification Calls',
 				smeBusinessName: 'Kasi Craftworks Co.',
 				youthId: 1,
 				youthName: 'Thabo Mokoena',
-				createdAt: new Date(Date.now() - 3600000 * 24 * 14).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 4).toISOString()
+				createdAt: new Date(
+					Date.now() - 3600000 * 24 * 14
+				).toISOString(),
+				updatedAt: new Date(
+					Date.now() - 3600000 * 24 * 4
+				).toISOString()
 			},
 			{
 				id: 2,
@@ -125,12 +280,17 @@ function getMockDb() {
 				rating: null,
 				verifiedAt: null,
 				taskId: 3,
-				taskTitle: 'Financial Records Reconciliation & Invoicing',
+				taskTitle:
+					'Financial Records Reconciliation & Invoicing',
 				smeBusinessName: 'Lindiwe Logistics',
 				youthId: 1,
 				youthName: 'Thabo Mokoena',
-				createdAt: new Date(Date.now() - 3600000 * 24 * 10).toISOString(),
-				updatedAt: new Date(Date.now() - 3600000 * 24 * 2).toISOString()
+				createdAt: new Date(
+					Date.now() - 3600000 * 24 * 10
+				).toISOString(),
+				updatedAt: new Date(
+					Date.now() - 3600000 * 24 * 2
+				).toISOString()
 			}
 		]
 	};
@@ -141,12 +301,17 @@ function getMockDb() {
 
 function saveMockDb(db) {
 	if (!browser) return;
-	localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(db));
+
+	localStorage.setItem(
+		MOCK_STORAGE_KEY,
+		JSON.stringify(db)
+	);
 }
 
-/**
- * Executes a simulated mock response for offline/fallback mode
- */
+/* =========================================
+   MOCK API FALLBACK
+========================================= */
+
 function handleMockFallback(endpoint, method, body) {
 	const db = getMockDb();
 	const cleanPath = endpoint.split('?')[0];
@@ -154,7 +319,10 @@ function handleMockFallback(endpoint, method, body) {
 	const params = urlObj.searchParams;
 
 	// AUTH: Register
-	if (cleanPath === '/api/v1/auth/register' && method === 'POST') {
+	if (
+		cleanPath === '/api/v1/auth/register' &&
+		method === 'POST'
+	) {
 		const user = {
 			id: Math.floor(Math.random() * 1000) + 10,
 			name: body.name,
@@ -164,6 +332,7 @@ function handleMockFallback(endpoint, method, body) {
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString()
 		};
+
 		return {
 			token: 'mock-jwt-token-' + Date.now(),
 			tokenType: 'Bearer',
@@ -173,14 +342,24 @@ function handleMockFallback(endpoint, method, body) {
 	}
 
 	// AUTH: Login
-	if (cleanPath === '/api/v1/auth/login' && method === 'POST') {
+	if (
+		cleanPath === '/api/v1/auth/login' &&
+		method === 'POST'
+	) {
 		let role = 'YOUTH';
 		let name = 'Thabo Mokoena';
 		const email = body.email || '';
-		if (email.includes('sme') || email.includes('business')) {
+
+		if (
+			email.includes('sme') ||
+			email.includes('business')
+		) {
 			role = 'SME';
 			name = 'Kasi Craftworks Co.';
-		} else if (email.includes('corp') || email.includes('sponsor')) {
+		} else if (
+			email.includes('corp') ||
+			email.includes('sponsor')
+		) {
 			role = 'CORPORATE';
 			name = 'Standard Bank Foundation';
 		} else if (email.includes('admin')) {
@@ -197,6 +376,7 @@ function handleMockFallback(endpoint, method, body) {
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString()
 		};
+
 		return {
 			token: 'mock-jwt-token-' + Date.now(),
 			tokenType: 'Bearer',
@@ -206,23 +386,37 @@ function handleMockFallback(endpoint, method, body) {
 	}
 
 	// TASKS: List
-	if (cleanPath === '/api/v1/tasks' && method === 'GET') {
+	if (
+		cleanPath === '/api/v1/tasks' &&
+		method === 'GET'
+	) {
 		return db.tasks;
 	}
 
 	// TASKS: Get single
-	const taskGetMatch = cleanPath.match(/^\/api\/v1\/tasks\/(\d+)$/);
+	const taskGetMatch = cleanPath.match(
+		/^\/api\/v1\/tasks\/(\d+)$/
+	);
+
 	if (taskGetMatch && method === 'GET') {
 		const id = Number(taskGetMatch[1]);
 		const found = db.tasks.find((t) => t.id === id);
+
 		if (!found) throw new Error('Task not found');
+
 		return found;
 	}
 
 	// TASKS: Create
-	if (cleanPath === '/api/v1/tasks' && method === 'POST') {
+	if (
+		cleanPath === '/api/v1/tasks' &&
+		method === 'POST'
+	) {
 		const newTask = {
-			id: db.tasks.length > 0 ? Math.max(...db.tasks.map((t) => t.id)) + 1 : 1,
+			id:
+				db.tasks.length > 0
+					? Math.max(...db.tasks.map((t) => t.id)) + 1
+					: 1,
 			title: body.title,
 			description: body.description || '',
 			category: body.category,
@@ -237,37 +431,51 @@ function handleMockFallback(endpoint, method, body) {
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString()
 		};
+
 		db.tasks.unshift(newTask);
 		saveMockDb(db);
+
 		return newTask;
 	}
 
 	// TASKS: Assign
-	const taskAssignMatch = cleanPath.match(/^\/api\/v1\/tasks\/(\d+)\/assign$/);
+	const taskAssignMatch = cleanPath.match(
+		/^\/api\/v1\/tasks\/(\d+)\/assign$/
+	);
+
 	if (taskAssignMatch && method === 'PATCH') {
 		const id = Number(taskAssignMatch[1]);
 		const youthId = Number(params.get('youthId') || 1);
 		const task = db.tasks.find((t) => t.id === id);
+
 		if (!task) throw new Error('Task not found');
+
 		task.assignedToId = youthId;
 		task.assignedToName = 'Youth Candidate #' + youthId;
 		task.status = 'IN_PROGRESS';
 		task.updatedAt = new Date().toISOString();
+
 		saveMockDb(db);
 		return task;
 	}
 
 	// TASKS: Complete
-	const taskCompleteMatch = cleanPath.match(/^\/api\/v1\/tasks\/(\d+)\/complete$/);
+	const taskCompleteMatch = cleanPath.match(
+		/^\/api\/v1\/tasks\/(\d+)\/complete$/
+	);
+
 	if (taskCompleteMatch && method === 'PATCH') {
 		const id = Number(taskCompleteMatch[1]);
 		const task = db.tasks.find((t) => t.id === id);
+
 		if (!task) throw new Error('Task not found');
+
 		task.status = 'COMPLETED';
 		task.updatedAt = new Date().toISOString();
 
-		// Auto create pending experience if not exists
+		// Auto-create pending experience if it does not exist
 		let exp = db.experiences.find((e) => e.taskId === id);
+
 		if (!exp) {
 			exp = {
 				id: db.experiences.length + 1,
@@ -278,41 +486,60 @@ function handleMockFallback(endpoint, method, body) {
 				verifiedAt: null,
 				taskId: task.id,
 				taskTitle: task.title,
-				smeBusinessName: task.smeBusinessName || 'SME Partner',
+				smeBusinessName:
+					task.smeBusinessName || 'SME Partner',
 				youthId: task.assignedToId || 1,
-				youthName: task.assignedToName || 'Youth Candidate',
+				youthName:
+					task.assignedToName || 'Youth Candidate',
 				createdAt: new Date().toISOString(),
 				updatedAt: new Date().toISOString()
 			};
+
 			db.experiences.unshift(exp);
 		}
+
 		saveMockDb(db);
 		return task;
 	}
 
 	// EXPERIENCES: List for youth
-	const expYouthMatch = cleanPath.match(/^\/api\/v1\/experiences\/youth\/(\d+)$/);
+	const expYouthMatch = cleanPath.match(
+		/^\/api\/v1\/experiences\/youth\/(\d+)$/
+	);
+
 	if (expYouthMatch && method === 'GET') {
 		const youthId = Number(expYouthMatch[1]);
-		return db.experiences.filter((e) => Number(e.youthId) === youthId);
+
+		return db.experiences.filter(
+			(e) => Number(e.youthId) === youthId
+		);
 	}
 
 	// EXPERIENCES: Get single
-	const expGetMatch = cleanPath.match(/^\/api\/v1\/experiences\/(\d+)$/);
+	const expGetMatch = cleanPath.match(
+		/^\/api\/v1\/experiences\/(\d+)$/
+	);
+
 	if (expGetMatch && method === 'GET') {
 		const id = Number(expGetMatch[1]);
 		const exp = db.experiences.find((e) => e.id === id);
+
 		if (!exp) throw new Error('Experience not found');
+
 		return exp;
 	}
 
 	// EXPERIENCES: Verify
-	const expVerifyMatch = cleanPath.match(/^\/api\/v1\/experiences\/(\d+)\/verify$/);
+	const expVerifyMatch = cleanPath.match(
+		/^\/api\/v1\/experiences\/(\d+)\/verify$/
+	);
+
 	if (expVerifyMatch && method === 'PATCH') {
 		const id = Number(expVerifyMatch[1]);
 		const feedback = params.get('feedback') || '';
 		const rating = Number(params.get('rating') || 5);
 		const exp = db.experiences.find((e) => e.id === id);
+
 		if (!exp) throw new Error('Experience not found');
 
 		exp.isVerified = true;
@@ -322,8 +549,9 @@ function handleMockFallback(endpoint, method, body) {
 		exp.verifiedAt = new Date().toISOString();
 		exp.updatedAt = new Date().toISOString();
 
-		// Also update corresponding task if available
+		// Also update corresponding task
 		const task = db.tasks.find((t) => t.id === exp.taskId);
+
 		if (task) {
 			task.status = 'VERIFIED';
 			task.updatedAt = new Date().toISOString();
@@ -333,50 +561,86 @@ function handleMockFallback(endpoint, method, body) {
 		return exp;
 	}
 
-	throw new Error(`Unhandled mock route: ${method} ${endpoint}`);
+	throw new Error(
+		`Unhandled mock route: ${method} ${endpoint}`
+	);
 }
 
+/* =========================================
+   MAIN HTTP REQUEST WRAPPER
+========================================= */
+
 /**
- * Main HTTP request wrapper
+ * Executes an HTTP request.
  * @param {string} endpoint
  * @param {RequestInit & { isAuth?: boolean }} options
  */
 export async function request(endpoint, options = {}) {
-	const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+	const url = endpoint.startsWith('http')
+		? endpoint
+		: `${API_BASE_URL}${endpoint}`;
+
 	const headers = new Headers(options.headers || {});
 
-	if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
+	if (
+		!headers.has('Content-Type') &&
+		options.body &&
+		!(options.body instanceof FormData)
+	) {
 		headers.set('Content-Type', 'application/json');
 	}
 
 	// Add Bearer token for authenticated requests
 	if (browser) {
 		const token = localStorage.getItem(TOKEN_KEY);
+
 		if (token && !headers.has('Authorization')) {
 			headers.set('Authorization', `Bearer ${token}`);
 		}
 	}
 
 	let response;
+
 	try {
 		response = await fetch(url, {
 			...options,
 			headers
 		});
 	} catch (networkError) {
-		// If backend is not running or network fails, gracefully fallback to mock database in browser
+		// Use mock data only when the backend is unavailable.
 		if (browser) {
-			console.warn(`[API] Backend unavailable at ${API_BASE_URL}. Using browser fallback data.`, networkError);
+			console.warn(
+				`[API] Backend unavailable at ${API_BASE_URL}. Using browser fallback data.`,
+				networkError
+			);
+
 			try {
-				const body = options.body && typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
-				const mockData = handleMockFallback(endpoint, options.method || 'GET', body);
-				return mockData;
+				const body =
+					options.body && typeof options.body === 'string'
+						? JSON.parse(options.body)
+						: options.body;
+
+				return handleMockFallback(
+					endpoint,
+					options.method || 'GET',
+					body
+				);
 			} catch (mockErr) {
-				console.error('[API] Fallback handler failed:', mockErr);
-				throw new Error(mockErr.message || 'Network connection failed and mock response was unavailable.');
+				console.error(
+					'[API] Fallback handler failed:',
+					mockErr
+				);
+
+				throw new Error(
+					mockErr.message ||
+					'Network connection failed and mock response was unavailable.'
+				);
 			}
 		}
-		throw new Error('Could not connect to backend server at ' + API_BASE_URL);
+
+		throw new Error(
+			'Could not connect to backend server at ' + API_BASE_URL
+		);
 	}
 
 	// Handle 401 Unauthorized
@@ -385,65 +649,122 @@ export async function request(endpoint, options = {}) {
 			toast.error('Session expired. Please log in again.');
 			auth.logout();
 		}
+
 		throw new Error('Unauthorized');
 	}
 
 	let json;
+
 	try {
 		json = await response.json();
 	} catch (e) {
 		if (!response.ok) {
-			throw new Error(`Request failed with status ${response.status} (${response.statusText})`);
+			throw new Error(
+				`Request failed with status ${response.status} (${response.statusText})`
+			);
 		}
+
 		return null;
 	}
 
 	if (!response.ok || (json && json.success === false)) {
-		const msg = json?.message || `Request failed with status ${response.status}`;
+		const msg =
+			json?.message ||
+			`Request failed with status ${response.status}`;
+
 		throw new Error(msg);
 	}
 
-	// Envelope: { success: true, message: "...", data: { ... } }
+	// Supports { success: true, message: "...", data: {...} }
 	return json.data !== undefined ? json.data : json;
 }
 
+/* =========================================
+   API METHODS
+========================================= */
+
 export const api = {
-	get: (endpoint, options = {}) => request(endpoint, { ...options, method: 'GET' }),
+	get: (endpoint, options = {}) =>
+		request(endpoint, { ...options, method: 'GET' }),
+
 	post: (endpoint, body, options = {}) =>
 		request(endpoint, {
 			...options,
 			method: 'POST',
-			body: body instanceof FormData ? body : JSON.stringify(body)
+			body:
+				body instanceof FormData
+					? body
+					: JSON.stringify(body)
 		}),
+
 	patch: (endpoint, body, options = {}) =>
 		request(endpoint, {
 			...options,
 			method: 'PATCH',
-			body: body ? (body instanceof FormData ? body : JSON.stringify(body)) : undefined
+			body: body
+				? body instanceof FormData
+					? body
+					: JSON.stringify(body)
+				: undefined
 		}),
-	delete: (endpoint, options = {}) => request(endpoint, { ...options, method: 'DELETE' }),
 
-	// Domain helpers
-	auth: {
-		login: (credentials) => api.post('/api/v1/auth/login', credentials),
-		register: (userData) => api.post('/api/v1/auth/register', userData)
+	delete: (endpoint, options = {}) =>
+		request(endpoint, {
+			...options,
+			method: 'DELETE'
+		}),
+
+	// PROFILE: localStorage demo methods
+	profile: {
+		get: (user) => getLocalProfile(user),
+
+		update: (profileData, user) =>
+			saveLocalProfile(profileData, user)
 	},
+
+	// AUTH
+	auth: {
+		login: (credentials) =>
+			api.post('/api/v1/auth/login', credentials),
+
+		register: (userData) =>
+			api.post('/api/v1/auth/register', userData)
+	},
+
+	// TASKS
 	tasks: {
 		list: () => api.get('/api/v1/tasks'),
+
 		get: (id) => api.get(`/api/v1/tasks/${id}`),
+
 		create: (task) => api.post('/api/v1/tasks', task),
-		assign: (id, youthId) => api.patch(`/api/v1/tasks/${id}/assign?youthId=${encodeURIComponent(youthId)}`),
-		complete: (id) => api.patch(`/api/v1/tasks/${id}/complete`)
+
+		assign: (id, youthId) =>
+			api.patch(
+				`/api/v1/tasks/${id}/assign?youthId=${encodeURIComponent(youthId)}`
+			),
+
+		complete: (id) =>
+			api.patch(`/api/v1/tasks/${id}/complete`)
 	},
+
+	// EXPERIENCES
 	experiences: {
-		get: (id) => api.get(`/api/v1/experiences/${id}`),
-		listForYouth: (youthId) => api.get(`/api/v1/experiences/youth/${youthId}`),
+		get: (id) =>
+			api.get(`/api/v1/experiences/${id}`),
+
+		listForYouth: (youthId) =>
+			api.get(`/api/v1/experiences/youth/${youthId}`),
+
 		verify: (id, feedback = '', rating = 5) => {
 			const query = new URLSearchParams({
 				feedback: feedback || '',
 				rating: String(rating)
 			});
-			return api.patch(`/api/v1/experiences/${id}/verify?${query.toString()}`);
+
+			return api.patch(
+				`/api/v1/experiences/${id}/verify?${query.toString()}`
+			);
 		}
 	}
 };
