@@ -318,7 +318,7 @@ function handleMockFallback(endpoint, method, body) {
 	const urlObj = new URL(endpoint, 'http://localhost');
 	const params = urlObj.searchParams;
 
-	// AUTH: Register
+
 	if (
 		cleanPath === '/api/v1/auth/register' &&
 		method === 'POST'
@@ -341,7 +341,6 @@ function handleMockFallback(endpoint, method, body) {
 		};
 	}
 
-	// AUTH: Login
 	if (
 		cleanPath === '/api/v1/auth/login' &&
 		method === 'POST'
@@ -385,7 +384,6 @@ function handleMockFallback(endpoint, method, body) {
 		};
 	}
 
-	// TASKS: List
 	if (
 		cleanPath === '/api/v1/tasks' &&
 		method === 'GET'
@@ -393,7 +391,6 @@ function handleMockFallback(endpoint, method, body) {
 		return db.tasks;
 	}
 
-	// TASKS: Get single
 	const taskGetMatch = cleanPath.match(
 		/^\/api\/v1\/tasks\/(\d+)$/
 	);
@@ -407,7 +404,7 @@ function handleMockFallback(endpoint, method, body) {
 		return found;
 	}
 
-	// TASKS: Create
+
 	if (
 		cleanPath === '/api/v1/tasks' &&
 		method === 'POST'
@@ -438,7 +435,7 @@ function handleMockFallback(endpoint, method, body) {
 		return newTask;
 	}
 
-	// TASKS: Assign
+
 	const taskAssignMatch = cleanPath.match(
 		/^\/api\/v1\/tasks\/(\d+)\/assign$/
 	);
@@ -459,7 +456,7 @@ function handleMockFallback(endpoint, method, body) {
 		return task;
 	}
 
-	// TASKS: Complete
+
 	const taskCompleteMatch = cleanPath.match(
 		/^\/api\/v1\/tasks\/(\d+)\/complete$/
 	);
@@ -473,7 +470,7 @@ function handleMockFallback(endpoint, method, body) {
 		task.status = 'COMPLETED';
 		task.updatedAt = new Date().toISOString();
 
-		// Auto-create pending experience if it does not exist
+
 		let exp = db.experiences.find((e) => e.taskId === id);
 
 		if (!exp) {
@@ -502,7 +499,7 @@ function handleMockFallback(endpoint, method, body) {
 		return task;
 	}
 
-	// EXPERIENCES: List for youth
+	
 	const expYouthMatch = cleanPath.match(
 		/^\/api\/v1\/experiences\/youth\/(\d+)$/
 	);
@@ -515,7 +512,7 @@ function handleMockFallback(endpoint, method, body) {
 		);
 	}
 
-	// EXPERIENCES: Get single
+
 	const expGetMatch = cleanPath.match(
 		/^\/api\/v1\/experiences\/(\d+)$/
 	);
@@ -529,7 +526,6 @@ function handleMockFallback(endpoint, method, body) {
 		return exp;
 	}
 
-	// EXPERIENCES: Verify
 	const expVerifyMatch = cleanPath.match(
 		/^\/api\/v1\/experiences\/(\d+)\/verify$/
 	);
@@ -549,7 +545,7 @@ function handleMockFallback(endpoint, method, body) {
 		exp.verifiedAt = new Date().toISOString();
 		exp.updatedAt = new Date().toISOString();
 
-		// Also update corresponding task
+		
 		const task = db.tasks.find((t) => t.id === exp.taskId);
 
 		if (task) {
@@ -570,11 +566,6 @@ function handleMockFallback(endpoint, method, body) {
    MAIN HTTP REQUEST WRAPPER
 ========================================= */
 
-/**
- * Executes an HTTP request.
- * @param {string} endpoint
- * @param {RequestInit & { isAuth?: boolean }} options
- */
 export async function request(endpoint, options = {}) {
 	const url = endpoint.startsWith('http')
 		? endpoint
@@ -607,7 +598,6 @@ export async function request(endpoint, options = {}) {
 			headers
 		});
 	} catch (networkError) {
-		// Use mock data only when the backend is unavailable.
 		if (browser) {
 			console.warn(
 				`[API] Backend unavailable at ${API_BASE_URL}. Using browser fallback data.`,
