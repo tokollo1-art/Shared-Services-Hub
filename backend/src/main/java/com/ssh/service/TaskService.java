@@ -32,9 +32,22 @@ import java.util.stream.Collectors;
  * Task lifecycle orchestration.
  *
  * Assign requires a PENDING application and re-checks tier eligibility.
- * Complete records exactly one Experience. Verify updates the task and the
- * experience together, creates exactly one Payment, appends to the hash chain
- * and publishes a TaskVerifiedEvent — all inside one transaction.
+ * Complete records exactly one Experience and stores the youth's reflection.
+ * Verify updates the task and the experience together, creates exactly one
+ * Payment, appends to the hash chain and publishes events — all inside one
+ * transaction.
+ *
+ * Slot 2 integration:
+ *   - Injects EventPublisher to notify the Python AI service of the
+ *     TASK_POSTED, TASK_ASSIGNED, TASK_COMPLETED and EXPERIENCE_VERIFIED
+ *     events. The webhook is sent after commit by EventPublisher's
+ *     @TransactionalEventListener.
+ *   - Stores the youth's reflection on the task at completion. The
+ *     reflection is what the evidence agent extracts skills from.
+ *
+ * @author SSH Team
+ * @version 1.2
+ * @since 2026
  */
 @Service
 public class TaskService {
@@ -47,6 +60,7 @@ public class TaskService {
     private final LedgerService ledgerService;
     private final UserAccountService userAccountService;
     private final ApplicationEventPublisher eventPublisher;
+    private final EventPublisher sshEventPublisher;
 
     public TaskService(TaskRepository taskRepository,
                        ApplicationService applicationService,
@@ -55,7 +69,8 @@ public class TaskService {
                        PaymentService paymentService,
                        LedgerService ledgerService,
                        UserAccountService userAccountService,
-                       ApplicationEventPublisher eventPublisher) {
+                       ApplicationEventPublisher eventPublisher,
+                       EventPublisher sshEventPublisher) {
         this.taskRepository = taskRepository;
         this.applicationService = applicationService;
         this.tierEligibilityService = tierEligibilityService;
@@ -64,6 +79,7 @@ public class TaskService {
         this.ledgerService = ledgerService;
         this.userAccountService = userAccountService;
         this.eventPublisher = eventPublisher;
+        this.sshEventPublisher = sshEventPublisher;
     }
 
     @Transactional
@@ -80,7 +96,9 @@ public class TaskService {
         task.setDurationDays(request.getDurationDays());
         task.setPaid(request.isPaid());
 
-        return toTaskResponse(taskRepository.save(task));
+        Task saved = taskRepository.save(task);
+        sshEventPublisher.publishTaskPosted(saved);
+        return toTaskResponse(saved);
     }
 
     public List<TaskResponse> listOpenTasks() {
@@ -120,35 +138,48 @@ public class TaskService {
         Youth youth = userAccountService.requireYouth(youthId);
         Application application = applicationService.requirePendingApplication(task, youth);
 
-        // Eligibility is enforced again here: applying and assigning are two
-        // separate moments, and the reservation may have expired in between.
         tierEligibilityService.assertCanBeAssigned(youth);
 
         task.assignTo(youth);
         applicationService.accept(task, application);
 
-        return toTaskResponse(taskRepository.save(task));
+        Task saved = taskRepository.save(task);
+        sshEventPublisher.publishTaskAssigned(saved.getId(), youth.getId(), sme.getId());
+        return toTaskResponse(saved);
     }
 
     /**
      * Complete an IN_PROGRESS task. Creates (or re-opens) the single
      * Experience row for the task inside the same transaction.
+     *
+     * The reflection is the youth's own account of the work. It is stored
+     * on the task and sent to the AI service with the TASK_COMPLETED event.
      */
     @Transactional
-    public TaskResponse completeTask(Long taskId, String youthEmail) {
+    public TaskResponse completeTask(Long taskId, String youthEmail, String reflection) {
         Youth youth = userAccountService.requireYouth(youthEmail);
         Task task = requireTask(taskId);
 
         if (task.getAssignedTo() == null
-                || !task.getAssignedTo().getId().equals(youth.getId())) {
+            || !task.getAssignedTo().getId().equals(youth.getId())) {
             throw new AccessDeniedException(
                 "Only the youth assigned to this task can complete it");
         }
 
         task.complete();
+        if (reflection != null && !reflection.isBlank()) {
+            task.setReflection(reflection.trim());
+        }
         experienceService.recordCompletion(task, youth);
 
-        return toTaskResponse(taskRepository.save(task));
+        Task saved = taskRepository.save(task);
+        sshEventPublisher.publishTaskCompleted(
+            saved.getId(),
+            youth.getId(),
+            saved.getSme().getId(),
+            saved.getReflection() != null ? saved.getReflection() : ""
+        );
+        return toTaskResponse(saved);
     }
 
     /**
@@ -156,7 +187,8 @@ public class TaskService {
      *
      * rating, feedback and reference are mandatory. The task and its
      * experience move to VERIFIED together, exactly one payment is created,
-     * the experience is appended to the hash chain, and an event is published.
+     * the experience is appended to the hash chain, and both the internal
+     * TaskVerifiedEvent and the SSH webhook EXPERIENCE_VERIFIED event fire.
      */
     @Transactional
     public VerificationResponse verifyTask(Long taskId, VerificationRequest request, String smeEmail) {
@@ -165,9 +197,8 @@ public class TaskService {
         User user = userAccountService.requireUser(smeEmail);
         Task task = requireTask(taskId);
 
-        // The youth who did the work may never sign it off.
         if (task.getAssignedTo() != null
-                && task.getAssignedTo().getUser().getId().equals(user.getId())) {
+            && task.getAssignedTo().getUser().getId().equals(user.getId())) {
             throw new AccessDeniedException(
                 "The assigned youth cannot verify their own work");
         }
@@ -210,6 +241,16 @@ public class TaskService {
             payment.getYouthAmount()
         ));
 
+        sshEventPublisher.publishExperienceVerified(
+            saved.getId(),
+            verifiedExperience.getYouth().getId(),
+            sme.getId(),
+            request.rating().intValue(),
+            request.feedback(),
+            request.reference(),
+            List.of()
+        );
+
         return new VerificationResponse(
             toTaskResponse(saved),
             experienceService.toResponse(verifiedExperience),
@@ -217,10 +258,6 @@ public class TaskService {
         );
     }
 
-    /**
-     * Convenience path used by PATCH /experiences/{id}/verify. Resolves the
-     * task and runs the exact same atomic verification.
-     */
     @Transactional
     public VerificationResponse verifyExperience(Long experienceId,
                                                  VerificationRequest request,
@@ -229,10 +266,6 @@ public class TaskService {
         return verifyTask(experience.getTask().getId(), request, smeEmail);
     }
 
-    /**
-     * Send completed work back for revision. The reason is mandatory and is
-     * stored on both the task and the experience so the youth knows what to fix.
-     */
     @Transactional
     public TaskResponse rejectTask(Long taskId, String reason, String smeEmail) {
         if (reason == null || reason.isBlank()) {

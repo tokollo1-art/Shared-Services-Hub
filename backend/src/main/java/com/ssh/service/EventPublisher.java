@@ -1,7 +1,7 @@
 package com.ssh.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.ssh.entity.Task;
 import com.ssh.repository.TaskSkillRepository;
 import org.slf4j.Logger;
@@ -181,7 +181,7 @@ public class EventPublisher {
         String json;
         try {
             json = objectMapper.writeValueAsString(envelope.payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             log.error("event.serialize.failed type={}", envelope.payload.get("type"), e);
             return;
         }

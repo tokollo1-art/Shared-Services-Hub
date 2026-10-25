@@ -44,8 +44,8 @@ public class AgentUserSeeder implements ApplicationRunner {
     public AgentUserSeeder(
         UserRepository userRepository,
         PasswordEncoder passwordEncoder,
-        @Value("${AGENT_EMAIL:}") String agentEmail,
-        @Value("${AGENT_PASSWORD:}") String agentPassword,
+        @Value("${agent.email:}") String agentEmail,
+        @Value("${agent.password:}") String agentPassword,
         @Value("${AGENT_NAME:SSH Agent}") String agentName
     ) {
         this.userRepository = userRepository;

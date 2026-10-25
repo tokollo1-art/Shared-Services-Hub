@@ -99,6 +99,14 @@ public class Task {
     private String revisionReason;
 
     /**
+     * The youth's own words about what they did. Captured at completion.
+     * Feeds the evidence agent's skill extraction and the reference draft.
+     * TEXT so a detailed reflection isn't truncated.
+     */
+    @Column(name = "reflection", columnDefinition = "TEXT")
+    private String reflection;
+
+    /**
      * Number of times the SME has sent this task back for revision.
      */
     @Column(name = "revision_count", nullable = false)
@@ -226,6 +234,14 @@ public class Task {
 
     public String getStatus() {
         return status;
+    }
+
+    public String getReflection() {
+        return reflection;
+    }
+
+    public void setReflection(String reflection) {
+        this.reflection = reflection;
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.ssh.controller;
 
+import com.ssh.dto.request.CompleteTaskRequest;
 import com.ssh.dto.request.RejectTaskRequest;
 import com.ssh.dto.request.TaskRequest;
 import com.ssh.dto.request.VerificationRequest;
@@ -29,13 +30,8 @@ import java.util.List;
  *
  * Purpose: REST endpoints for creating, listing, and assigning tasks.
  *
- * WHY SSH needs this controller:
- *   - SMEs post tasks through POST /api/v1/tasks
- *   - Youth browse tasks through GET /api/v1/tasks
- *   - Assignment and completion happen through PATCH endpoints
- *
  * @author SSH Team
- * @version 1.0
+ * @version 1.1
  * @since 2026
  */
 @RestController
@@ -118,14 +114,22 @@ public class TaskController {
     /**
      * Mark a task as completed.
      * The youth identity is taken from the JWT; only the assigned youth may complete.
+     *
+     * The optional request body carries the youth's reflection — their own
+     * account of the work. It is stored on the task and sent to the AI service
+     * with the TASK_COMPLETED event, where the evidence agent extracts skills
+     * from it.
      */
     @PatchMapping("/{id}/complete")
     @Operation(summary = "Mark a task as completed (assigned youth only)")
     public ResponseEntity<ApiResponse<TaskResponse>> completeTask(
         @PathVariable Long id,
+        @RequestBody(required = false) CompleteTaskRequest request,
         Authentication authentication) {
 
-        TaskResponse completed = taskService.completeTask(id, authentication.getName());
+        String reflection = request != null ? request.reflection() : null;
+        TaskResponse completed = taskService.completeTask(
+            id, authentication.getName(), reflection);
         return ResponseEntity.ok(ApiResponse.success("Task completed", completed));
     }
 

@@ -59,7 +59,7 @@ class SpringClient:
     async def get_task(self, task_id: int) -> TaskPayload:
         if self._mock:
             return self._mock_task(task_id)
-        body = await self._get(f"/api/v1/tasks/{task_id}")
+        body = await self._get(f"/api/v1/agent/tasks/{task_id}")
         return TaskPayload.model_validate(body)
 
     async def invite(self, request: InvitationRequest) -> None:
