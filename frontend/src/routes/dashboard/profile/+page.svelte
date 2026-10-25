@@ -79,10 +79,9 @@
       // Populate Read-only user details
       fullName = user?.name || profile.fullName || "";
       email = user?.email || profile.email || "";
-
-      // Populate SME fields
       registrationNumber =
-        profile.registrationNumber || user?.registrationNumber || "";
+        user?.registrationNumber || profile.registrationNumber || "";
+
       registrationDate =
         profile.registrationDate || user?.registrationDate || "";
 
@@ -272,84 +271,71 @@
               >
                 Business & Compliance Details
               </h3>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label
-                    for="registrationNumber"
-                    class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
-                    >Registration Number *</label
-                  >
-                  <input
-                    id="registrationNumber"
-                    type="text"
-                    required
-                    bind:value={registrationNumber}
-                    placeholder="e.g. 2021/123456/07"
-                    class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
-                  />
-                </div>
-                <div>
-                  <label
-                    for="registrationDate"
-                    class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
-                    >Registration Date *</label
-                  >
-                  <input
-                    id="registrationDate"
-                    type="date"
-                    required
-                    bind:value={registrationDate}
-                    class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
-                  />
-                </div>
-                <div>
-                  <label
-                    for="enterpriseType"
-                    class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
-                    >Enterprise Type *</label
-                  >
-                  <select
-                    id="enterpriseType"
-                    bind:value={enterpriseType}
-                    class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm"
-                  >
-                    {#each enterpriseTypes as t}
-                      <option value={t}>{t}</option>
-                    {/each}
-                  </select>
-                </div>
-                <div>
-                  <label
-                    for="enterpriseStatus"
-                    class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
-                    >Enterprise Status *</label
-                  >
-                  <select
-                    id="enterpriseStatus"
-                    bind:value={enterpriseStatus}
-                    class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm"
-                  >
-                    {#each enterpriseStatuses as s}
-                      <option value={s}>{s}</option>
-                    {/each}
-                  </select>
-                </div>
-                <div class="md:col-span-2">
-                  <label
-                    for="financialYearEnd"
-                    class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
-                    >Financial Year End *</label
-                  >
-                  <select
-                    id="financialYearEnd"
-                    bind:value={financialYearEnd}
-                    class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
-                  >
-                    {#each financialYearEnds as m}
-                      <option value={m}>{m}</option>
-                    {/each}
-                  </select>
-                </div>
+
+              <div>
+                <label
+                  for="registrationNumber"
+                  class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
+                >
+                  Registration Number (Locked) *
+                </label>
+                <input
+                  id="registrationNumber"
+                  type="text"
+                  disabled
+                  value={registrationNumber}
+                  class="mt-1.5 block w-full px-4 py-2.5 text-sm font-mono bg-[#F2F5FA] border border-[#C8D4E8] text-[#6A84AC] cursor-not-allowed"
+                />
+                <span class="text-[10px] text-[#6A84AC] font-mono mt-1 block"
+                ></span>
+              </div>
+              <div>
+                <label
+                  for="enterpriseType"
+                  class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
+                  >Enterprise Type *</label
+                >
+                <select
+                  id="enterpriseType"
+                  bind:value={enterpriseType}
+                  class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm"
+                >
+                  {#each enterpriseTypes as t}
+                    <option value={t}>{t}</option>
+                  {/each}
+                </select>
+              </div>
+              <div>
+                <label
+                  for="enterpriseStatus"
+                  class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
+                  >Enterprise Status *</label
+                >
+                <select
+                  id="enterpriseStatus"
+                  bind:value={enterpriseStatus}
+                  class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm"
+                >
+                  {#each enterpriseStatuses as s}
+                    <option value={s}>{s}</option>
+                  {/each}
+                </select>
+              </div>
+              <div class="md:col-span-2">
+                <label
+                  for="financialYearEnd"
+                  class="block text-xs font-mono font-bold uppercase tracking-wider text-[#0D1B3E]"
+                  >Financial Year End *</label
+                >
+                <select
+                  id="financialYearEnd"
+                  bind:value={financialYearEnd}
+                  class="cape-input mt-1.5 block w-full px-4 py-2.5 text-sm font-mono"
+                >
+                  {#each financialYearEnds as m}
+                    <option value={m}>{m}</option>
+                  {/each}
+                </select>
               </div>
             </div>
           {/if}

@@ -42,6 +42,14 @@
       return;
     }
 
+    if (isSme) {
+      const regFormat = /^\d{4}\/\d{6}\/\d{2}$/;
+      if (!regFormat.test(registrationNumber.trim())) {
+        errorMessage =
+          "Registration number must follow the strict format: 4 digits / 6 digits / 2 digits (e.g. 2021/123456/07).";
+        return;
+      }
+    }
     loading = true;
 
     const payload = {
@@ -62,7 +70,7 @@
       const res = await api.auth.register(payload);
       toast.success("Registration successful! Welcome to the hub.");
       auth.login(res, true);
-      goto("dashboard/profile"); //Redirect to profile page
+      goto("/dashboard/profile"); //Redirect to profile page
     } catch (err) {
       errorMessage =
         err.message || "Registration failed. Please check your information.";
