@@ -15,12 +15,10 @@
   let errorMessage = $state(null);
   let successMessage = $state(null);
 
-  // Profile states
   let hasExistingProfile = $state(false);
   let isEditing = $state(false);
   let originalProfile = {};
 
-  // Read-only account information
   let fullName = $state("");
   let email = $state("");
   let registrationNumber = $state("");
@@ -32,7 +30,6 @@
   let enterpriseStatus = $state("");
   let financialYearEnd = $state("");
 
-  // Youth fields
   let idNumber = $state("");
   let educationalInstitution = $state("");
   let primaryFieldOfStudy = $state("");
@@ -40,7 +37,6 @@
   let isGraduated = $state(false);
   let graduationYear = $state("");
 
-  // Dropdown options
   const enterpriseTypes = [
     "Pty Ltd",
     "Close Corporation (CC)",
@@ -78,7 +74,6 @@
 
   const yearOptions = $derived(isGraduated ? graduatedYears : expectedYears);
 
-  // Values that belong to the editable profile form
   function getFormValues() {
     return {
       registrationNumber,
@@ -112,7 +107,6 @@
     graduationYear = values.graduationYear ?? "";
   }
 
-  // Detect whether the backend has saved profile information.
   function detectExistingProfile(profile) {
     if (typeof profile.hasExistingProfile === "boolean") {
       return profile.hasExistingProfile;
@@ -145,7 +139,6 @@
     });
   }
 
-  // Load saved profile information from the backend.
   async function loadProfile() {
     loading = true;
     errorMessage = null;
@@ -163,7 +156,6 @@
         throw new Error("The server returned an invalid profile response.");
       }
 
-      // Support direct responses and wrapped profile responses.
       const profile = response.profile ?? response;
 
       fullName = user?.name ?? profile.fullName ?? profile.name ?? "";
@@ -188,8 +180,6 @@
 
       hasExistingProfile = detectExistingProfile(profile);
 
-      // New users complete their profile immediately.
-      // Existing users must click Edit Profile.
       isEditing = !hasExistingProfile;
 
       originalProfile = getFormValues();
@@ -198,7 +188,6 @@
 
       errorMessage = err?.message || "Failed to load your profile.";
 
-      // Do not mistake an API failure for a new user.
     } finally {
       loading = false;
     }
@@ -290,7 +279,6 @@
 
       await api.profile.update(payload);
 
-      // Save succeeded. Update the local snapshot and UI.
       originalProfile = getFormValues();
       hasExistingProfile = true;
       isEditing = false;
