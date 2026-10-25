@@ -1,17 +1,35 @@
 # Slot 4: data science for SSH
 
-Matching, seed data, readiness baseline and impact metrics. Pure Python 3, standard library only (pytest for tests).
+Matching, seed data, readiness baseline and impact metrics. Pure Python 3, standard library only (pytest for tests; psycopg2 only for the optional Postgres test).
 
 ```
-ssh_ds/taxonomy.py   skills, categories, similarity, parse_skills("Excel, Canva")
+ssh_ds/tiers.py      tier rules, mirrored from Tier.java (youth_tier, eligible, max_reservations)
+ssh_ds/taxonomy.py   the 99 curated skills by slug, similarity, parse_skills("Data entry, ...")
 ssh_ds/matching.py   score_match, rank_candidates, build_youth_profile   <- Slot 3 wraps this
-ssh_ds/tiers.py      youth_tier, eligible (ASSUMED cut-offs, see below)
+ssh_ds/ledger.py     public ledger hash chain, mirrored from LedgerService
 ssh_ds/metrics.py    readiness_score, impact_report, metric definitions
 ssh_ds/seed.py       generator: python -m ssh_ds.seed --out out
-ssh_ds/locations.py  Gauteng areas with coordinates
-out/                 seed_data.json, schema_additions.sql, seed.sql
-tests/               39 tests, run with: python -m pytest
+ssh_ds/esco_subset.json   copy of the agents' skill list (a test fails if they drift apart)
+out/                 seed_data.json, seed.sql
+tests/               94 tests, run with: python -m pytest
+tests/schema/entities.sql   test fixture: tables as the entities define them
 ```
+
+## Tier rules (from `Tier.java`)
+
+| Tier | Verified experiences | Max active reservations |
+|---|---|---|
+| 0 | 0 | 1 |
+| 1 | 1 to 2 | 2 |
+| 2 | 3 to 4 | 3 |
+| 3 | 5+ | unlimited |
+
+Reservation window: 48 hours. Tasks use the same 0 to 3 scale. The seed follows two rules the backend does not yet enforce, so confirm them:
+
+* A task of tier N (1 and up) needs a youth of tier N or higher (this is what `AgentService.isTierEligible` compares).
+* A tier 0 task is reserved for tier 0 youth until `tasks.reserved_until` (posted + 48h), then tier 1 youth may take it too.
+
+`tests/test_tiers.py` reads `Tier.java` and fails if `tiers.py` stops matching it.
 
 ## For Slot 3 (matchmaker agent)
 
@@ -20,46 +38,43 @@ from ssh_ds import score_match, rank_candidates, build_youth_profile
 
 profile = build_youth_profile(youth, experiences, tasks_by_id)   # counts VERIFIED only
 result  = score_match(profile, task)
-# {"score": 88.7, "reasons": ["Skills match: ...", ...], "components": {...}, "cold_start": True}
+# {"score": 88.7, "reasons": [...], "components": {...}, "cold_start": True}
 
 top = rank_candidates(eligible_profiles, task, top_n=5)          # ties break by youth id
 ```
 
+* This is not what the Python agents use today (their `/score` and ESCO similarity are separate). Nothing imports `ssh_ds` yet; wiring it in needs a decision from whoever owns the agents.
 * Filter by tier first. The function does not check eligibility.
-* `reasons` are ordered most useful first. Use the top two or three for "why this match".
-* `skills` and `required_skills` can be lists of tags or the free text stored in the database ("Excel, Data Entry"). Unknown skills are ignored.
+* `skills` and `required_skills` take slugs, labels, or the free text stored in `youth.skills`. Unknown skills are ignored.
+* Tasks need `remote` (the `tasks.remote` column; true is treated as online). `work_mode` and `commitment` are optional extras that are not database columns.
 * Missing fields never crash it; they score neutral.
-* Scores: skills 35%, location 20%, category history 20%, rating 15%, availability 10%. Youth with no verified experience take the cold-start branch: skills 50%, location 25%, interests 15%, availability 10%. A perfect-fit newcomer can still score 100.
+* Scores: skills 35%, location 20%, category history 20%, rating 15%, availability 10%. Youth with no verified experience take the cold-start branch: skills 50%, location 25%, interests 15%, availability 10%.
 * Ratings are shrunk toward 3.5, so one 5-star task doesn't beat a long solid record.
 
 ## For whoever loads the database
 
 ```
-psql ssh -f out/schema_additions.sql   # adds columns, safe to re-run
-psql ssh -f out/seed.sql               # users, smes, youth, tasks, experiences, resets id sequences
+# tables must exist and be EMPTY: start the backend once (ddl-auto=update), then
+psql ssh -v ON_ERROR_STOP=1 -f out/seed.sql
 ```
 
-Tested against Postgres 16 with tables shaped like the current entities. Every seeded account's password is `Password123!`.
+`seed.sql` is one transaction, so an error rolls everything back. It fills `users, smes, youth, skills, youth_skills, task_skills, tasks, experiences, ledger_entries, payments, wallets, wallet_transactions` and resets their id sequences. Every seeded account's password is `Password123!`. It uses only columns that exist on the entities, and sets every NOT NULL primitive (`remote`, `revision_count`, `ledger_share_enabled`, `is_*`).
 
-New columns the matching needs (add the fields to the Java entities too):
+What was and was not verified: the file loads into PostgreSQL 16 against `tests/schema/entities.sql`, which was written by hand from the entity annotations. It was not generated by Hibernate, because the backend could not be built where this was made. `tests/test_entity_drift.py` checks the seed's columns against the Java sources, but please run the load once against your real database.
 
-| Table | Columns |
-|---|---|
-| `tasks` | `required_skills` (text), `work_mode` ONSITE/HYBRID/ONLINE, `commitment` FULL_TIME/PART_TIME/WEEKENDS/FLEXIBLE, `location`, `tier` (0 to 2) |
-| `youth` | `open_to_remote`, `max_travel_km`, `interests` (comma-separated categories) |
-| `smes` | `work_mode`, `location`, `turnover_band`, `registration_date`, `enterprise_status`, `financial_year_end` |
+The ledger hashes match `LedgerService.canonical`; they were checked against a line-for-line copy of that method on the JDK, not the compiled class. Run `GET` ledger verification once after loading to confirm the chain is intact.
 
 ## What the data contains
 
-50 youth, 15 SMEs, 3 funders (users with role CORPORATE), 150 tasks (100 verified, 8 in progress, 4 completed awaiting verification, 36 open, 2 cancelled), 100 verified experiences plus 4 pending. 3 alumni. Everything is fictional and Gauteng-based. Emails are `@example.com`. Registration numbers use a 99xxxx range so they can't be real. History is simulated in time order, so each verified task respected the tier rules when it was assigned.
+50 youth, 15 SMEs, 3 funders (users with role CORPORATE), 150 tasks (100 verified, 8 in progress, 4 completed awaiting verification, 36 open, 2 cancelled), 104 experiences (100 verified, 4 pending), 99 skills, 100 ledger entries, 100 payments (95 paid, 5 pending admin payout) and the reserve wallet `SSH_PLATFORM_RESERVE`. Youth by tier: 13 / 21 / 10 / 6. 3 alumni. Open tasks by tier: 16 / 10 / 7 / 3; some tier 0 tasks are still inside their 48-hour reservation and some are past it. Everything is fictional and Gauteng-based. Emails are `@example.com`. Registration numbers use a 99xxxx range so they can't be real. History is simulated in time order, so each verified task respected the tier rules when it was assigned.
 
-## Assumptions to confirm
+`seed_data.json` also keeps matching inputs that have no database column: youth `open_to_remote`, `max_travel_km`, `interests`; SME `work_mode`, `turnover_band` and similar; task `work_mode` and `commitment`.
 
-1. **Tier cut-offs.** The plan only says Tier 0 is 0 to 2 verified experiences. I assumed Tier 1 is 3 to 5 and Tier 2 is 6+. They are constants in `tiers.py`; change them to match Slot 1's tier service.
-2. **No tier or application concept exists in the code yet.** `tier` on tasks is a new column.
-3. **Distances are straight-line between area centres.** Roads are longer. Good enough for ranking.
-4. **The readiness score and metrics are heuristics on synthetic data.** Don't present them as real outcomes.
+## Things to confirm with the team
 
-## Impact metrics
-
-Definitions are in `metrics.METRIC_DEFINITIONS`; `impact_report(dataset, now)` computes all three: time to first verified experience (median, with youth still waiting reported separately), the tier funnel, and placement rate. `readiness_score(profile, now)` returns a 0 to 100 score, a label, and next steps a coach agent could use.
+1. **Three tier definitions exist.** `Tier.java` (above), `AgentService.tierOf` (3 and 10 verified, three tiers) and the older `Task.tier` comment (0 to 2). This package follows `Tier.java`.
+2. **Tier 0 reservation is not enforced anywhere yet.** `AgentService.isTierEligible` lets any higher-tier youth take a tier 0 task.
+3. **Nothing in the backend seeds the `skills` table.** This seed does, from the agents' list.
+4. **Slugs vs labels.** The backend sends skill slugs to the agents, which compare label text with spaces. Identical slugs match; partial word overlap between different slugs does not.
+5. **`youth.availability` has no agreed values.** The seed uses FULL_TIME, PART_TIME, WEEKENDS; the frontend mock uses "Immediate".
+6. Distances are straight-line between area centres. Roads are longer. Good enough for ranking.

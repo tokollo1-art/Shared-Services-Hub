@@ -9,8 +9,8 @@ import pytest
 from ssh_ds import eligible, score_match, build_youth_profile
 from ssh_ds.metrics import impact_report, readiness_score
 from ssh_ds.seed import NOW, generate, to_sql
-from ssh_ds.taxonomy import parse_skills
-from ssh_ds.tiers import youth_tier
+from ssh_ds.taxonomy import display_skill, parse_skills
+from ssh_ds.tiers import max_reservations, youth_tier
 
 
 @pytest.fixture(scope="module")
@@ -27,7 +27,7 @@ def test_required_counts(ds):
     assert len(ds["youth"]) == 50 and len(ds["smes"]) == 15 and len(ds["funders"]) == 3
     assert len(ds["tasks"]) == 150
     assert sum(e["status"] == "VERIFIED" for e in ds["experiences"]) == 100
-    assert Counter(t["tier"] for t in ds["tasks"]).keys() == {0, 1, 2}
+    assert Counter(t["tier"] for t in ds["tasks"]).keys() == {0, 1, 2, 3}
     assert len(ds["users"]) == 1 + 3 + 15 + 50
 
 
@@ -117,9 +117,31 @@ def test_active_work_respects_tier_rules(ds):
             assert eligible(verified[t["assigned_to"]], t["tier"])
 
 
-def test_open_tasks_have_tier_0_supply(ds):
+def test_active_reservations_stay_under_the_tier_cap(ds):
+    """TierEligibilityService counts IN_PROGRESS tasks (and pending applications)."""
+    verified = Counter(e["youth_id"] for e in ds["experiences"] if e["status"] == "VERIFIED")
+    active = Counter(t["assigned_to"] for t in ds["tasks"] if t["status"] == "IN_PROGRESS")
+    for youth_id, n in active.items():
+        cap = max_reservations(youth_tier(verified[youth_id]))
+        assert cap is None or n <= cap
+
+
+def test_every_tier_has_youth_and_tasks(ds):
+    verified = Counter(e["youth_id"] for e in ds["experiences"] if e["status"] == "VERIFIED")
+    assert {youth_tier(verified[y["id"]]) for y in ds["youth"]} == {0, 1, 2, 3}
     open_t = Counter(t["tier"] for t in ds["tasks"] if t["status"] == "OPEN")
-    assert open_t[0] >= 15 and open_t[1] > 0 and open_t[2] > 0
+    assert open_t[0] >= 10 and all(open_t[t] > 0 for t in (1, 2, 3))
+
+
+def test_tier_0_tasks_carry_the_48_hour_reservation(ds):
+    for t in ds["tasks"]:
+        if t["tier"] == 0:
+            assert ts(t["reserved_until"]) - ts(t["created_at"]) == dt.timedelta(hours=48)
+        else:
+            assert t["reserved_until"] is None
+    open0 = [t for t in ds["tasks"] if t["status"] == "OPEN" and t["tier"] == 0]
+    still_reserved = [t for t in open0 if ts(t["reserved_until"]) > NOW]
+    assert still_reserved and len(still_reserved) < len(open0)   # demo has both kinds
 
 
 def test_alumni(ds):
@@ -204,9 +226,9 @@ def test_impact_report(ds):
     assert t["verified_youth"] + t["waiting_youth"] == 50 and t["waiting_youth"] == 13
     assert 3 <= t["median_days"] <= 40
     f = {s["stage"]: s["youth"] for s in rep["tier_funnel"]["stages"]}
-    assert f["registered"] == 50 and f["1_plus_verified"] == 37
-    assert f["registered"] >= f["1_plus_verified"] >= f["tier_1"] >= f["tier_2"]
-    assert rep["tier_funnel"]["active_by_tier"][0] + rep["tier_funnel"]["active_by_tier"][1] + rep["tier_funnel"]["active_by_tier"][2] == 47
+    assert f["registered"] == 50 and f["tier_1"] == 37 and f["tier_2"] == 16 and f["tier_3"] == 6
+    assert f["registered"] >= f["tier_1"] >= f["tier_2"] >= f["tier_3"]
+    assert sum(rep["tier_funnel"]["active_by_tier"].values()) == 47
     assert rep["placement_rate"]["placed"] == 3 and rep["placement_rate"]["rate"] == 0.06
     assert set(rep["definitions"]) >= {"time_to_first_verified_experience", "tier_funnel", "placement_rate"}
 
@@ -231,6 +253,26 @@ def test_sql_escapes_quotes():
     assert _sql("O'Brien") == "'O''Brien'" and _sql(None) == "NULL" and _sql(True) == "TRUE"
 
 
-def test_skills_string_round_trips_through_sql(ds):
+def test_youth_skills_text_round_trips(ds):
+    """youth.skills (legacy text) holds labels; parse_skills gives the slugs back."""
+    from ssh_ds.seed import table_rows
+    for row, y in zip(table_rows(ds)["youth"], ds["youth"]):
+        assert parse_skills(row["skills"]) == y["skills"]
+
+
+def test_sql_writes_only_entity_columns(ds):
+    """No columns the entities lack: the old work_mode / commitment / required_skills etc."""
     sql = to_sql(ds)
-    assert "'Excel, Data Entry" in sql or "Data Entry" in sql
+    for dropped in ("work_mode", "commitment", "required_skills", "open_to_remote", "max_travel_km",
+                    "interests", "turnover_band", "enterprise_status", "financial_year_end"):
+        assert dropped not in sql
+
+
+def test_reflection_only_on_completed_and_verified_tasks():
+    ds = generate(42)
+    for t in ds["tasks"]:
+        if t["status"] in ("COMPLETED", "VERIFIED"):
+            assert t["reflection"] and len(t["reflection"]) < 5000
+            assert all(display_skill(sk) in t["reflection"] for sk in t["required_skills"])
+        else:
+            assert t["reflection"] is None

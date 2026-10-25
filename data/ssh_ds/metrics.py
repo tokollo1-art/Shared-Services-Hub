@@ -7,7 +7,7 @@ real outcomes.
 import datetime as dt
 import statistics
 
-from .tiers import youth_tier, TIER0_MAX_VERIFIED, TIER1_MAX_VERIFIED
+from .tiers import MAX_TIER, tier_floor, youth_tier
 
 METRIC_DEFINITIONS = {
     "time_to_first_verified_experience": (
@@ -17,9 +17,11 @@ METRIC_DEFINITIONS = {
         "as 'waiting', not averaged in, so the median is not flattered."),
     "tier_funnel": (
         "How many youth reach each stage, counting VERIFIED experiences only: "
-        "registered, 1+ verified (past the first-timer trap), Tier 1 "
-        f"({TIER0_MAX_VERIFIED + 1}+ verified), Tier 2 ({TIER1_MAX_VERIFIED + 1}+ verified), "
-        "placed (alumni). Each stage also shows conversion from the previous stage."),
+        "registered, then each tier as defined by the backend (Tier 1 = "
+        f"{tier_floor(1)}+ verified, Tier 2 = {tier_floor(2)}+, Tier 3 = {tier_floor(3)}+), "
+        "then placed (alumni). Tier 1 is also the 'past the first-timer trap' stage. "
+        "Each stage shows conversion from the previous stage. active_by_tier counts "
+        "non-alumni youth currently in each tier."),
     "placement_rate": (
         "Placed (alumni) youth divided by all registered youth, plus the median days "
         "from first verified experience to placement. Small cohorts swing a lot, so "
@@ -119,20 +121,17 @@ def tier_funnel(ds):
         if e["status"] == "VERIFIED":
             counts[e["youth_id"]] += 1
     youth = ds["youth"]
-    stages = [
-        ("registered", len(youth)),
-        ("1_plus_verified", sum(c >= 1 for c in counts.values())),
-        ("tier_1", sum(youth_tier(c) >= 1 for c in counts.values())),
-        ("tier_2", sum(youth_tier(c) >= 2 for c in counts.values())),
-        ("placed", sum(y["is_alumni"] for y in youth)),
-    ]
+    stages = [("registered", len(youth))]
+    for t in range(1, MAX_TIER + 1):
+        stages.append((f"tier_{t}", sum(youth_tier(c) >= t for c in counts.values())))
+    stages.append(("placed", sum(y["is_alumni"] for y in youth)))
     out, prev = [], None
     for name, n in stages:
         out.append({"stage": name, "youth": n,
                     "conversion_from_previous": None if prev in (None, 0) else round(n / prev, 3)})
         prev = n
     current = {t: sum(1 for y in youth if not y["is_alumni"] and youth_tier(counts[y["id"]]) == t)
-               for t in (0, 1, 2)}
+               for t in range(MAX_TIER + 1)}
     return {"stages": out, "active_by_tier": current}
 
 

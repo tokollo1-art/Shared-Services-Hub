@@ -8,7 +8,7 @@ Tier eligibility is NOT checked here. Filter by tier first (Slot 1's service),
 then score the eligible youth.
 
 Youth dict (all keys optional except where noted; missing ones are neutral):
-    skills            list of tags, or the free-text DB string ("Excel, Canva")
+    skills            list of skill slugs, labels, or the free-text DB string
     location          area name, e.g. "Soweto"
     availability      FULL_TIME | PART_TIME | WEEKENDS
     open_to_remote    bool (default True)
@@ -20,14 +20,18 @@ Youth dict (all keys optional except where noted; missing ones are neutral):
 `build_youth_profile` fills the last three from raw experience rows.
 
 Task dict:
-    required_skills   list or free text (falls back to category skills)
+    required_skills   list of slugs or labels (from task_skills)
     category          e.g. "Digital Operations"
     location          area name
-    work_mode         ONSITE | HYBRID | ONLINE (default ONSITE)
-    commitment        FULL_TIME | PART_TIME | WEEKENDS | FLEXIBLE (default FLEXIBLE)
+    remote            bool, the tasks.remote column; True is treated as ONLINE
+    work_mode         optional ONSITE | HYBRID | ONLINE; wins over `remote`
+                      when present (HYBRID cannot be expressed by `remote`)
+    commitment        optional FULL_TIME | PART_TIME | WEEKENDS | FLEXIBLE
+                      (default FLEXIBLE). Not a database column.
 """
+from .catalog import SKILL_TASK_CATEGORIES
 from .locations import distance_km
-from .taxonomy import SKILL_CATEGORY, display_skill, parse_skills, skill_coverage
+from .taxonomy import display_skill, parse_skills, skill_coverage
 
 # Weights sum to 1.0 in each branch.
 WEIGHTS = {"skills": 0.35, "location": 0.20, "availability": 0.10,
@@ -52,8 +56,15 @@ def _pretty(tag):
     return display_skill(tag).lower()
 
 
+def _work_mode(task):
+    mode = task.get("work_mode")
+    if mode:
+        return mode.upper()
+    return "ONLINE" if task.get("remote") else "ONSITE"
+
+
 def _location_fit(youth, task):
-    mode = (task.get("work_mode") or "ONSITE").upper()
+    mode = _work_mode(task)
     remote_ok = youth.get("open_to_remote", True)
     if mode == "ONLINE":
         if remote_ok:
@@ -117,7 +128,9 @@ def _interest_fit(youth, task):
     cat = task.get("category")
     if cat and cat in (youth.get("interests") or []):
         return 1.0, f"You're interested in {cat}"
-    own_cats = {SKILL_CATEGORY[s] for s in parse_skills(youth.get("skills"))}
+    own_cats = set()
+    for s in parse_skills(youth.get("skills")):
+        own_cats |= SKILL_TASK_CATEGORIES.get(s, set())
     if cat in own_cats:
         return 0.5, f"Fits your {cat} skills"
     return 0.0, None

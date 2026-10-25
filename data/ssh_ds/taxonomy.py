@@ -1,111 +1,165 @@
-"""Skill taxonomy and skill similarity.
+"""Skill taxonomy: the backend's curated skills, keyed by slug.
 
-Categories are the same labels the SSH frontend already uses for tasks
-(Digital Operations, Marketing & Creative, ...), plus three more.
-`Youth.skills` is free text in the database, so `parse_skills` turns
-"Excel, Data entry, WhatsApp Business" into canonical tags.
+The list is a copy of backend/Artificial Intelligence Agents/app/skills/
+esco_subset.json (99 skills, with ESCO URI and OFO code). It is the same list
+the `skills` table should hold. Slug rule: lowercase label, runs of anything
+that is not a letter or digit become one hyphen ("cash-up procedures" ->
+"cash-up-procedures"). `youth_skills` and `task_skills` link to skills by id;
+the APIs and the agents see slugs.
+
+Categories below are for grouping in filters (`skills.category`). The source
+file has none, so they are defined here.
 """
+import json
 import re
+from pathlib import Path
 
-SKILLS_BY_CATEGORY = {
-    "Digital Operations": ["data_entry", "excel", "filing", "typing",
-                           "email_admin", "google_workspace", "scheduling"],
-    "Marketing & Creative": ["canva", "social_media", "copywriting",
-                             "photography", "video_editing", "graphic_design"],
-    "Accounting & Finance": ["bookkeeping", "cash_handling", "invoicing",
-                             "payroll_basics", "vat_basics"],
-    "Customer Support": ["customer_service", "call_handling",
-                         "whatsapp_business", "complaint_handling"],
-    "IT & Technical": ["web_basics", "html_css", "mobile_support",
-                       "hardware_support", "troubleshooting",
-                       "networking_basics", "python_basics"],
-    "Retail & Sales": ["sales", "inventory", "merchandising", "packing"],
-    "Education & Training": ["tutoring", "mathematics", "english", "childcare"],
-    "Logistics & Events": ["delivery", "event_support", "food_service",
-                           "time_management"],
+_FILE = Path(__file__).with_name("esco_subset.json")
+
+
+def slugify(text):
+    return re.sub(r"[^a-z0-9]+", "-", str(text).lower()).strip("-")
+
+
+SKILLS = []
+for _e in json.loads(_FILE.read_text(encoding="utf-8")):
+    SKILLS.append({"slug": slugify(_e["label"]), "label": _e["label"],
+                   "esco_uri": _e.get("esco_uri"), "ofo_code": _e.get("ofo_code"),
+                   "ofo_label": _e.get("ofo_label")})
+
+_CATEGORY_SLUGS = {
+    "retail": "inventory-coordination stock-taking sales-support inventory-forecasting "
+              "order-fulfilment returns-handling mystery-shopping stock-replenishment "
+              "visual-merchandising point-of-sale-operation upselling product-demonstration "
+              "sales-reporting",
+    "customer-service": "customer-service phone-etiquette customer-relationship-management "
+                        "customer-feedback-collection complaint-handling",
+    "finance": "cash-handling basic-bookkeeping invoice-processing payment-reconciliation "
+               "budget-tracking expense-recording petty-cash-handling bank-reconciliation "
+               "cash-up-procedures",
+    "marketing": "social-media-management content-writing graphic-design photography "
+                 "video-editing digital-marketing email-marketing community-management "
+                 "copywriting proofreading market-research survey-design",
+    "logistics": "delivery-coordination driving logistics-coordination packaging "
+                 "warehouse-support procurement-support supplier-communication "
+                 "event-coordination travel-booking",
+    "admin": "email-correspondence scheduling document-management calendar-management "
+             "report-writing file-organisation digital-filing photocopying-and-scanning "
+             "office-equipment-operation meeting-coordination minute-taking "
+             "document-drafting template-formatting project-coordination",
+    "data": "data-entry database-entry data-analysis spreadsheet-management "
+            "data-visualisation data-cleaning basic-statistical-analysis research "
+            "search-engine-research",
+    "tech": "basic-coding website-management digital-literacy data-privacy-awareness "
+            "online-security-basics cloud-file-management",
+    "trades": "basic-repairs gardening cleaning-and-hygiene food-preparation waste-management",
+    "health-safety": "first-aid health-and-safety-compliance quality-checking "
+                     "sustainability-practices",
+    "soft-skills": "time-management communication teamwork problem-solving "
+                   "attention-to-detail presentation-skills negotiation leadership "
+                   "mentoring conflict-resolution stakeholder-communication "
+                   "task-prioritisation",
+    "language": "translation",
 }
+SKILL_CATEGORY = {s: c for c, slugs in _CATEGORY_SLUGS.items() for s in slugs.split()}
+for _s in SKILLS:
+    _s["category"] = SKILL_CATEGORY[_s["slug"]]   # KeyError here = a skill needs a category
 
-CATEGORIES = list(SKILLS_BY_CATEGORY)
-SKILL_CATEGORY = {s: c for c, ss in SKILLS_BY_CATEGORY.items() for s in ss}
-ALL_SKILLS = sorted(SKILL_CATEGORY)
+ALL_SKILLS = sorted(s["slug"] for s in SKILLS)
+SKILL_BY_SLUG = {s["slug"]: s for s in SKILLS}
+CATEGORIES = sorted(_CATEGORY_SLUGS)
 
-# Explicit cross-category links: partial credit for closely related skills.
+# Explicit links between closely related skills: partial credit.
 _RELATED_PAIRS = [
-    ("excel", "bookkeeping"), ("data_entry", "excel"), ("data_entry", "typing"),
-    ("data_entry", "bookkeeping"), ("data_entry", "inventory"),
-    ("filing", "email_admin"), ("google_workspace", "email_admin"),
-    ("canva", "graphic_design"), ("canva", "social_media"),
-    ("social_media", "copywriting"), ("social_media", "whatsapp_business"),
-    ("photography", "video_editing"), ("photography", "social_media"),
-    ("graphic_design", "web_basics"), ("customer_service", "sales"),
-    ("customer_service", "cash_handling"), ("whatsapp_business", "sales"),
-    ("sales", "merchandising"), ("inventory", "packing"),
-    ("inventory", "merchandising"), ("cash_handling", "bookkeeping"),
-    ("invoicing", "bookkeeping"), ("invoicing", "excel"),
-    ("payroll_basics", "excel"), ("vat_basics", "bookkeeping"),
-    ("tutoring", "mathematics"), ("tutoring", "english"),
-    ("tutoring", "childcare"), ("delivery", "time_management"),
-    ("event_support", "food_service"), ("event_support", "customer_service"),
-    ("mobile_support", "customer_service"), ("troubleshooting", "customer_service"),
-    ("html_css", "web_basics"), ("python_basics", "excel"),
-    ("email_admin", "english"), ("scheduling", "time_management"),
-    ("call_handling", "complaint_handling"),
+    ("data-entry", "database-entry"), ("data-entry", "spreadsheet-management"),
+    ("data-entry", "data-cleaning"), ("database-entry", "spreadsheet-management"),
+    ("spreadsheet-management", "data-visualisation"),
+    ("spreadsheet-management", "basic-bookkeeping"), ("spreadsheet-management", "budget-tracking"),
+    ("spreadsheet-management", "invoice-processing"), ("data-cleaning", "data-analysis"),
+    ("data-analysis", "basic-statistical-analysis"), ("data-analysis", "data-visualisation"),
+    ("digital-filing", "file-organisation"), ("digital-filing", "cloud-file-management"),
+    ("file-organisation", "document-management"), ("document-management", "document-drafting"),
+    ("document-drafting", "template-formatting"), ("document-drafting", "report-writing"),
+    ("email-correspondence", "communication"), ("scheduling", "calendar-management"),
+    ("scheduling", "meeting-coordination"), ("calendar-management", "meeting-coordination"),
+    ("meeting-coordination", "minute-taking"),
+    ("basic-bookkeeping", "expense-recording"), ("basic-bookkeeping", "bank-reconciliation"),
+    ("basic-bookkeeping", "invoice-processing"), ("payment-reconciliation", "bank-reconciliation"),
+    ("cash-handling", "cash-up-procedures"), ("cash-handling", "petty-cash-handling"),
+    ("cash-handling", "point-of-sale-operation"), ("petty-cash-handling", "expense-recording"),
+    ("social-media-management", "community-management"),
+    ("social-media-management", "digital-marketing"), ("social-media-management", "copywriting"),
+    ("graphic-design", "visual-merchandising"), ("graphic-design", "photography"),
+    ("photography", "video-editing"), ("copywriting", "content-writing"),
+    ("copywriting", "proofreading"), ("digital-marketing", "email-marketing"),
+    ("market-research", "survey-design"), ("customer-feedback-collection", "survey-design"),
+    ("customer-service", "complaint-handling"), ("customer-service", "phone-etiquette"),
+    ("customer-service", "customer-relationship-management"),
+    ("customer-service", "sales-support"), ("sales-support", "upselling"),
+    ("sales-support", "product-demonstration"), ("sales-support", "sales-reporting"),
+    ("inventory-coordination", "stock-taking"), ("inventory-coordination", "stock-replenishment"),
+    ("inventory-coordination", "inventory-forecasting"), ("stock-taking", "stock-replenishment"),
+    ("warehouse-support", "order-fulfilment"), ("warehouse-support", "packaging"),
+    ("order-fulfilment", "packaging"), ("delivery-coordination", "driving"),
+    ("delivery-coordination", "logistics-coordination"), ("event-coordination", "project-coordination"),
+    ("logistics-coordination", "procurement-support"), ("procurement-support", "supplier-communication"),
+    ("basic-coding", "website-management"), ("online-security-basics", "data-privacy-awareness"),
+    ("digital-literacy", "cloud-file-management"), ("basic-repairs", "problem-solving"),
+    ("mentoring", "communication"), ("conflict-resolution", "complaint-handling"),
+    ("stakeholder-communication", "communication"), ("time-management", "task-prioritisation"),
 ]
 RELATED = {frozenset(p) for p in _RELATED_PAIRS}
 
 SAME_CREDIT = 1.0
 RELATED_CREDIT = 0.6
 SAME_CATEGORY_CREDIT = 0.35
+NO_CATEGORY_CREDIT = {"soft-skills"}   # two soft skills are not "the same field"
 
-_DISPLAY = {"html_css": "HTML/CSS", "whatsapp_business": "WhatsApp Business",
-            "vat_basics": "VAT Basics", "python_basics": "Python Basics",
-            "email_admin": "Email Admin"}
-
+# Older spellings and the skill tags the first version of this package used.
 _ALIASES = {
-    "ms_excel": "excel", "microsoft_excel": "excel", "spreadsheets": "excel",
-    "social_media_management": "social_media", "social_media_marketing": "social_media",
-    "bookkeeping_basics": "bookkeeping", "customer_care": "customer_service",
-    "customer_support": "customer_service", "whatsapp": "whatsapp_business",
-    "html": "html_css", "css": "html_css", "python": "python_basics",
-    "maths": "mathematics", "math": "mathematics", "data_capture": "data_entry",
-    "stock_control": "inventory", "driving": "delivery",
+    "excel": "spreadsheet-management", "ms-excel": "spreadsheet-management",
+    "microsoft-excel": "spreadsheet-management", "spreadsheets": "spreadsheet-management",
+    "canva": "graphic-design", "social-media": "social-media-management",
+    "social-media-marketing": "social-media-management", "bookkeeping": "basic-bookkeeping",
+    "bookkeeping-basics": "basic-bookkeeping", "customer-support": "customer-service",
+    "customer-care": "customer-service", "stock-control": "stock-taking",
+    "inventory": "inventory-coordination", "data-capture": "data-entry",
+    "sales": "sales-support",
 }
 
 
-def _normalise(text):
-    return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
-
-
-def display_skill(tag):
-    """Human-readable skill name, e.g. 'data_entry' -> 'Data Entry'."""
-    return _DISPLAY.get(tag, tag.replace("_", " ").title())
+def display_skill(slug):
+    """Label for a slug, e.g. 'data-entry' -> 'data entry'. Unknown slugs are spaced out."""
+    s = SKILL_BY_SLUG.get(slug)
+    return s["label"] if s else str(slug).replace("-", " ")
 
 
 def parse_skills(value):
-    """Turn free text or a list into a de-duplicated list of canonical tags.
+    """Turn free text or a list into a de-duplicated list of skill slugs.
 
-    Unknown skills are ignored. Accepts "Excel, Data Entry" or a list.
+    Accepts slugs, labels, or the free text in the youth.skills column
+    ("Data entry, Spreadsheet management"). Unknown skills are ignored.
     """
     if not value:
         return []
     items = re.split(r"[,;\n|]", value) if isinstance(value, str) else list(value)
     tags = []
     for item in items:
-        tag = _normalise(str(item))
+        tag = slugify(item)
         tag = _ALIASES.get(tag, tag)
-        if tag in SKILL_CATEGORY and tag not in tags:
+        if tag in SKILL_BY_SLUG and tag not in tags:
             tags.append(tag)
     return tags
 
 
 def skill_similarity(a, b):
-    """Similarity of two skill tags in [0, 1]."""
+    """Similarity of two skill slugs in [0, 1]."""
     if a == b:
         return SAME_CREDIT
     if frozenset((a, b)) in RELATED:
         return RELATED_CREDIT
     ca, cb = SKILL_CATEGORY.get(a), SKILL_CATEGORY.get(b)
-    if ca is not None and ca == cb:
+    if ca is not None and ca == cb and ca not in NO_CATEGORY_CREDIT:
         return SAME_CATEGORY_CREDIT
     return 0.0
 

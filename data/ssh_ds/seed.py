@@ -1,30 +1,45 @@
 """Seed data generator: 50 youth, 15 SMEs, 3 funders, 150 tasks, 100 verified
 experiences, set in Gauteng. All people and businesses are fictional.
 
-    python -m ssh_ds.seed --out out        # writes seed_data.json + SQL files
+    python -m ssh_ds.seed --out out        # writes seed_data.json + seed.sql
 
-Deterministic: the same seed always gives the same data. History is
-simulated in time order, so every verified experience obeys the tier rules
-at the moment it was assigned.
+The SQL fills the tables the backend entities define: users, smes, youth,
+skills, youth_skills, task_skills, tasks, experiences, ledger_entries,
+payments, wallets, wallet_transactions. Load it into an EMPTY database whose
+tables already exist (start the backend once, or see tests/schema/).
+
+Deterministic: the same seed always gives the same data. History is simulated
+in time order, so every verified experience obeyed the tier rules (tiers.py,
+mirroring Tier.java) at the moment it was assigned.
 """
 import argparse
 import datetime as dt
 import json
 import random
+import uuid
 from pathlib import Path
 
 from . import catalog
+from .ledger import build_chain
 from .locations import AREAS, distance_km
-from .taxonomy import (CATEGORIES, SKILL_CATEGORY, SKILLS_BY_CATEGORY,
-                       display_skill)
-from .tiers import youth_tier
+from .taxonomy import SKILLS, display_skill
+from .tiers import MAX_TIER, RESERVATION_WINDOW_HOURS, youth_tier
+
+CATEGORIES = list(catalog.TASK_TEMPLATES)
 
 NOW = dt.datetime(2026, 10, 22, 12, 0, 0)   # "today" for the demo data
 
 # Verified experiences per youth: 50 youth, exactly 100 in total.
+# By backend tier: 13 in Tier 0, 21 in Tier 1 (1-2), 10 in Tier 2 (3-4), 6 in Tier 3 (5+).
 VERIFIED_COUNTS = [0] * 13 + [1] * 11 + [2] * 10 + [3] * 6 + [4] * 4 + [5] * 3 + [6] * 2 + [8]
 N_IN_PROGRESS, N_COMPLETED, N_OPEN, N_CANCELLED = 8, 4, 36, 2
-OPEN_BY_TIER = {0: 20, 1: 10, 2: 6}
+OPEN_BY_TIER = {0: 16, 1: 10, 2: 7, 3: 3}
+N_FRESH_OPEN_TIER0 = 4         # open tier 0 tasks still inside their 48h reservation window
+
+PLATFORM_FEE_PERCENT = 10.0    # PaymentService.PLATFORM_FEE_PERCENT
+RESERVE_WALLET_NAME = "SSH_PLATFORM_RESERVE"   # WalletService.RESERVE_WALLET_NAME
+FUNDED_SHARE = 0.25            # share of each funder's commitment already paid into the reserve
+PENDING_PAYOUTS = 5            # the most recent verified tasks still wait for an admin payout
 
 # Bcrypt hash of the demo password "Password123!" for every seeded account.
 DEMO_PASSWORD = "Password123!"
@@ -33,7 +48,7 @@ DEMO_PASSWORD_HASH = "$2b$10$N.mMNomn9XrSKy.WY8B3D.LcbOoaTxKqGRXyEXzA6sSS8ry4d1I
 # Big townships and metro areas weigh more as youth home areas.
 AREA_WEIGHTS = {"Soweto": 6, "Tembisa": 5, "Alexandra": 4, "Mamelodi": 4,
                 "Katlehong": 3, "Diepsloot": 3, "Soshanguve": 3, "Orange Farm": 3}
-BUDGET_RANGE = {0: (150, 600), 1: (400, 1200), 2: (800, 2500)}
+BUDGET_RANGE = {0: (150, 600), 1: (400, 1200), 2: (800, 2500), 3: (1200, 3500)}
 TURNOVER_BANDS = ["Under R1m", "R1m to R5m", "R5m to R10m", "R10m to R50m"]
 MONTHS = ["January", "February", "March", "April", "May", "June", "July",
           "August", "September", "October", "November", "December"]
@@ -96,8 +111,9 @@ def _build_youth(rng, counts):
         area = _weighted(rng, areas, [AREA_WEIGHTS.get(a, 1) for a in areas])
         primary = rng.choice(CATEGORIES)
         other = rng.choice([c for c in CATEGORIES if c != primary])
-        skills = rng.sample(SKILLS_BY_CATEGORY[primary], k=min(3, len(SKILLS_BY_CATEGORY[primary])))
-        skills += rng.sample(SKILLS_BY_CATEGORY[other], k=rng.randint(1, 2))
+        skills = rng.sample(catalog.CATEGORY_SKILLS[primary], k=3)
+        extra = [x for x in catalog.CATEGORY_SKILLS[other] if x not in skills]
+        skills += rng.sample(extra, k=rng.randint(1, 2))
         interests = [primary] + ([other] if rng.random() < 0.35 else [])
         youth.append({
             "id": i, "user_id": 19 + i, "name": f"{first} {last}",
@@ -118,13 +134,21 @@ def _build_youth(rng, counts):
 
 
 def _pick_category(rng, y):
-    own = {SKILL_CATEGORY[s] for s in y["skills"]}
+    own = set()
+    for sk in y["skills"]:
+        own |= catalog.SKILL_TASK_CATEGORIES.get(sk, set())
     cats = sorted(own)
     return _weighted(rng, cats, [3 if c == y["_primary"] else 1 for c in cats])
 
 
+def _template_level(tier):
+    """Templates are written for tiers 0-2; tier 3 tasks reuse the tier 2 ones."""
+    return min(tier, 2)
+
+
 def _pick_template(rng, category, tier, skills):
-    options = [t for t in catalog.TASK_TEMPLATES[category] if tier in t[3]]
+    level = _template_level(tier)
+    options = [t for t in catalog.TASK_TEMPLATES[category] if level in t[3]]
     weights = [1 + 2 * len(set(t[2]) & set(skills)) for t in options]
     return _weighted(rng, options, weights)
 
@@ -137,12 +161,18 @@ def _pick_sme(rng, smes, category, area):
 
 
 def _task_tier_for(rng, verified_so_far):
+    """Tier of the next task for a youth with this many verified experiences.
+
+    Never above the youth's own tier (tiers.eligible). Tier 0 youth only see
+    tier 0 tasks; tier 1 youth stay at tier 1 (tier 0 is reserved for newcomers).
+    """
     t = youth_tier(verified_so_far)
-    if t == 0:
-        return 0
-    if t == 1:
-        return 1
-    return 1 if rng.random() < 0.3 else 2
+    if t <= 1:
+        return t
+    r = rng.random()
+    if t == 2:
+        return 1 if r < 0.3 else 2
+    return 2 if r < 0.5 else 3 if r < 0.9 else 1
 
 
 def _new_task(rng, sme, tmpl, tier, category, created, status, youth=None):
@@ -154,16 +184,59 @@ def _new_task(rng, sme, tmpl, tier, category, created, status, youth=None):
         mode = rng.choice(["ONSITE", "ONLINE"])
     pool = COVERS[youth["availability"]] if youth else ["PART_TIME", "FULL_TIME", "WEEKENDS", "FLEXIBLE"]
     lo, hi = BUDGET_RANGE[tier]
+    days = _weighted(rng, [1, 2, 3, 5, 7], [25, 30, 20, 15, 10])
     return {
         "sme_id": sme["id"], "assigned_to": youth["id"] if youth else None,
         "title": title, "description": f"{detail} Posted by {sme['business_name']}.",
         "category": category, "status": status, "tier": tier,
-        "required_skills": list(skills), "work_mode": mode,
-        "commitment": rng.choice(pool), "location": sme["location"],
+        "required_skills": list(skills), "location": sme["location"],
+        "remote": mode == "ONLINE",
+        "est_hours": float(max(2, days * rng.choice([2, 3, 4]))),
         "budget": float(round(rng.randint(lo, hi) / 50) * 50),
-        "duration_days": _weighted(rng, [1, 2, 3, 5, 7], [25, 30, 20, 15, 10]),
-        "is_paid": True, "created_at": _iso(created), "updated_at": _iso(created),
+        "duration_days": days, "is_paid": True,
+        "revision_reason": None, "revision_count": 0,
+        # tier 0 tasks are reserved for first-timers for 48h after posting
+        "reserved_until": None,
+        "created_at": _iso(created), "updated_at": _iso(created),
+        # Matching inputs with no backend column (not written to SQL):
+        "work_mode": mode, "commitment": rng.choice(pool),
     }
+
+
+REFLECTION_OPENERS = [
+    "I {verb} this task for {sme}. The main thing I did was {skills}.",
+    "For {sme} I {verb} the work myself. It involved {skills}.",
+    "This job for {sme} was about {skills}, and I {verb} it from start to finish.",
+]
+REFLECTION_CLOSERS = [
+    "I checked my work before handing it in and asked when something was unclear.",
+    "The owner gave feedback along the way and I adjusted what I had done.",
+    "I kept a record of what I did so it could be reviewed.",
+    "Next time I would plan the steps earlier so the work goes faster.",
+]
+
+
+def _reflection(rng, task, sme_name):
+    """First-person account of the work, like the text a youth submits on completion.
+
+    The evidence agent extracts skills from this, so it names the task's skills."""
+    names = [display_skill(sk) for sk in task["required_skills"]] or ["the task"]
+    listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    opener = rng.choice(REFLECTION_OPENERS).format(
+        verb=rng.choice(["completed", "finished", "carried out"]), sme=sme_name, skills=listed)
+    return f"{opener} {task['title']}. {rng.choice(REFLECTION_CLOSERS)}"
+
+
+REFERENCE_KINDS = {
+    "Digital Operations": "Shared folder", "Marketing & Creative": "Proof approved",
+    "Accounting & Finance": "Ledger page", "Customer Support": "Call log",
+    "IT & Technical": "Job card", "Retail & Sales": "Stock sheet",
+    "Education & Training": "Register", "Logistics & Events": "Delivery note",
+}
+
+
+def _reference(rng, task):
+    return f"{REFERENCE_KINDS[task['category']]} {rng.choice('ABCDEF')}{rng.randint(1000, 9999)}"
 
 
 def _rating(rng, y, task):
@@ -226,6 +299,7 @@ def generate(seed=42):
                 "_task": task, "youth_id": y["id"], "status": "VERIFIED",
                 "start_date": _iso(_stamp(rng, start)), "end_date": _iso(end_ts),
                 "feedback": rng.choice(catalog.FEEDBACK[int(rating)]),
+                "reference": _reference(rng, task),
                 "is_verified": True, "verified_at": _iso(verified_at), "rating": rating,
                 "created_at": _iso(end_ts), "updated_at": _iso(verified_at),
             })
@@ -252,7 +326,8 @@ def generate(seed=42):
             experiences.append({
                 "_task": task, "youth_id": y["id"], "status": "PENDING",
                 "start_date": _iso(_stamp(rng, start)), "end_date": _iso(_stamp(rng, end)),
-                "feedback": None, "is_verified": False, "verified_at": None, "rating": None,
+                "feedback": None, "reference": None, "is_verified": False,
+                "verified_at": None, "rating": None,
                 "created_at": _iso(_stamp(rng, end)), "updated_at": _iso(_stamp(rng, end)),
             })
 
@@ -260,6 +335,7 @@ def generate(seed=42):
     tiers = [t for t, c in OPEN_BY_TIER.items() for _ in range(c)]
     assert len(tiers) == N_OPEN
     rng.shuffle(tiers)
+    fresh_tier0 = 0
     cats = [CATEGORIES[i % len(CATEGORIES)] for i in range(N_OPEN + N_CANCELLED)]
     rng.shuffle(cats)
     for k in range(N_OPEN + N_CANCELLED):
@@ -269,6 +345,8 @@ def generate(seed=42):
         sme = rng.choice([s for s in smes if cat in s["categories"]])
         tmpl = _pick_template(rng, cat, tier, [])
         days_ago = rng.randint(14, 40) if cancelled else rng.randint(0, 12)
+        if tier == 0 and not cancelled and fresh_tier0 < N_FRESH_OPEN_TIER0:
+            days_ago, fresh_tier0 = rng.choice([0, 1]), fresh_tier0 + 1
         task = _new_task(rng, sme, tmpl, tier, cat, _stamp(rng, NOW.date() - dt.timedelta(days=days_ago)),
                          "CANCELLED" if cancelled else "OPEN")
         tasks.append(task)
@@ -286,6 +364,9 @@ def generate(seed=42):
     tasks.sort(key=lambda t: (t["created_at"], t["title"]))
     for i, t in enumerate(tasks, 1):
         t["id"] = i
+        if t["tier"] == 0:
+            t["reserved_until"] = _iso(dt.datetime.fromisoformat(t["created_at"])
+                                       + dt.timedelta(hours=RESERVATION_WINDOW_HOURS))
     experiences.sort(key=lambda e: (e["created_at"], e["youth_id"]))
     for i, e in enumerate(experiences, 1):
         e["id"], e["task_id"] = i, e.pop("_task")["id"]
@@ -305,6 +386,33 @@ def generate(seed=42):
         users.append({"id": y["user_id"], "name": y["name"], "email": y["email"], "role": "YOUTH",
                       "created_at": y["created_at"]})
 
+    # 5. Public ledger codes (made on first use, so only youth with verified work have one).
+    verified_n = {y["id"]: 0 for y in youth}
+    for e in experiences:
+        if e["status"] == "VERIFIED":
+            verified_n[e["youth_id"]] += 1
+    for y in youth:
+        n = verified_n[y["id"]]
+        y["ledger_code"] = uuid.UUID(int=rng.getrandbits(128), version=4).hex if n else None
+        y["ledger_share_enabled"] = bool(n) and (y["is_alumni"] or (n >= 2 and rng.random() < 0.35))
+
+    # 6. Skills tables, the hash chain, payments and the reserve wallet.
+    skills = [{"id": i, **{k: s[k] for k in ("slug", "label", "category", "esco_uri", "ofo_code")}}
+              for i, s in enumerate(SKILLS, 1)]
+    skill_id = {s["slug"]: s["id"] for s in skills}
+    youth_skills = [{"youth_id": y["id"], "skill_id": skill_id[sk]} for y in youth for sk in y["skills"]]
+    task_skills = [{"task_id": t["id"], "skill_id": skill_id[sk]} for t in tasks for sk in t["required_skills"]]
+    ledger_entries = build_chain(experiences)
+    payments, wallet_tx = _payments_and_wallet(rng, tasks, experiences, funders)
+
+    # Reflections come from their own RNG so adding them leaves every other value (and
+    # the ledger hashes) exactly as before.
+    rrng = random.Random(seed + 1)
+    sme_name = {m["id"]: m["business_name"] for m in smes}
+    for t in tasks:
+        t["reflection"] = (_reflection(rrng, t, sme_name[t["sme_id"]])
+                           if t["status"] in ("COMPLETED", "VERIFIED") else None)
+
     for y in youth:
         for k in [k for k in y if k.startswith("_")]:
             del y[k]
@@ -312,8 +420,53 @@ def generate(seed=42):
         "meta": {"generated_for": NOW.isoformat(timespec="seconds"), "seed": seed,
                  "demo_password": DEMO_PASSWORD, "synthetic": True},
         "users": users, "youth": youth, "smes": smes, "funders": funders,
-        "tasks": tasks, "experiences": experiences,
+        "skills": skills, "youth_skills": youth_skills, "task_skills": task_skills,
+        "tasks": tasks, "experiences": experiences, "ledger_entries": ledger_entries,
+        "payments": payments,
+        "wallets": [{"id": 1, "name": RESERVE_WALLET_NAME, "currency": "ZAR",
+                     "balance": wallet_tx[-1]["balance_after"], "created_at": wallet_tx[0]["created_at"],
+                     "updated_at": wallet_tx[-1]["created_at"]}],
+        "wallet_transactions": wallet_tx,
     }
+
+
+def _round2(v):
+    return float(int(v * 100 + 0.5)) / 100.0      # Math.round(v * 100.0) / 100.0 for v >= 0
+
+
+def _payments_and_wallet(rng, tasks, experiences, funders):
+    """One payment per verified task, and the reserve wallet's credits and debits."""
+    by_task = {t["id"]: t for t in tasks}
+    payments = []
+    verified = sorted((e for e in experiences if e["status"] == "VERIFIED"),
+                      key=lambda e: (e["verified_at"], e["id"]))
+    for n, e in enumerate(verified):
+        total = by_task[e["task_id"]]["budget"]
+        fee = _round2(total * (PLATFORM_FEE_PERCENT / 100.0))
+        verified_at = dt.datetime.fromisoformat(e["verified_at"])
+        paid = verified_at + dt.timedelta(days=rng.randint(1, 3), hours=rng.randint(0, 5))
+        is_paid = n < len(verified) - PENDING_PAYOUTS and paid <= NOW
+        payments.append({
+            "id": len(payments) + 1, "task_id": e["task_id"], "youth_id": e["youth_id"],
+            "total_amount": total, "platform_fee": fee, "youth_amount": _round2(total - fee),
+            "status": "PAID" if is_paid else "PENDING",
+            "paid_at": _iso(paid) if is_paid else None,
+            "reference": "SANDBOX-" + str(uuid.UUID(int=rng.getrandbits(128), version=4)) if is_paid else None,
+            "created_at": e["verified_at"], "updated_at": _iso(paid) if is_paid else e["verified_at"],
+        })
+
+    events = [(_iso(NOW - dt.timedelta(days=280 - 3 * f["id"])), "CREDIT",
+               round(f["committed_amount"] * FUNDED_SHARE, 2), f"Funder tranche: {f['name']}")
+              for f in funders]
+    events += [(p["paid_at"], "DEBIT", p["youth_amount"], f"Payout for payment {p['id']}")
+               for p in payments if p["status"] == "PAID"]
+    events.sort(key=lambda ev: (ev[0], ev[1] != "CREDIT"))
+    tx, balance = [], 0.0
+    for at, kind, amount, ref in events:
+        balance = round(balance + amount if kind == "CREDIT" else balance - amount, 2)
+        tx.append({"id": len(tx) + 1, "wallet_id": 1, "type": kind, "amount": amount,
+                   "balance_after": balance, "reference": ref, "created_at": at})
+    return payments, tx
 
 
 # ---------------------------------------------------------------------- SQL
@@ -333,66 +486,71 @@ def _insert(table, cols, rows):
     return "\n".join(out)
 
 
-SCHEMA_ADDITIONS = """\
--- Columns Slot 4 matching needs on top of the current entities.
--- Add the matching fields to the Java entities (Hibernate ddl-auto=update will
--- also create them). Safe to run more than once.
-ALTER TABLE smes  ADD COLUMN IF NOT EXISTS work_mode VARCHAR(10);
-ALTER TABLE smes  ADD COLUMN IF NOT EXISTS location VARCHAR(100);
-ALTER TABLE smes  ADD COLUMN IF NOT EXISTS turnover_band VARCHAR(20);
-ALTER TABLE smes  ADD COLUMN IF NOT EXISTS registration_date DATE;
-ALTER TABLE smes  ADD COLUMN IF NOT EXISTS enterprise_status VARCHAR(20);
-ALTER TABLE smes  ADD COLUMN IF NOT EXISTS financial_year_end VARCHAR(15);
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS required_skills TEXT;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS work_mode VARCHAR(10);
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS commitment VARCHAR(15);
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS location VARCHAR(100);
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tier INTEGER;
-ALTER TABLE youth ADD COLUMN IF NOT EXISTS open_to_remote BOOLEAN;
-ALTER TABLE youth ADD COLUMN IF NOT EXISTS max_travel_km INTEGER;
-ALTER TABLE youth ADD COLUMN IF NOT EXISTS interests TEXT;
-"""
+# Columns written per table, in order. Every column is a real entity column
+# (snake_case, Spring's default naming). Primitive boolean and int fields
+# (users.is_active, smes.is_verified, youth.is_alumni, youth.ledger_share_enabled,
+# tasks.is_paid, tasks.remote, tasks.revision_count, experiences.is_verified)
+# are NOT NULL in Hibernate's DDL, so each one is always written.
+TABLES = [
+    ("users", "users", ["id", "name", "email", "password", "role", "is_active", "created_at", "updated_at"]),
+    ("smes", "smes", ["id", "user_id", "business_name", "registration_number", "industry", "description",
+                      "employee_count", "bbbee_level", "is_verified", "created_at", "updated_at"]),
+    ("youth", "youth", ["id", "user_id", "education", "skills", "portfolio", "bio", "location", "availability",
+                        "is_alumni", "alumni_date", "ledger_code", "ledger_share_enabled",
+                        "created_at", "updated_at"]),
+    ("skills", "skills", ["id", "slug", "label", "category", "esco_uri", "ofo_code"]),
+    ("tasks", "tasks", ["id", "sme_id", "assigned_to", "title", "description", "category", "status", "budget",
+                        "duration_days", "is_paid", "revision_reason", "revision_count", "tier",
+                        "reserved_until", "remote", "location", "est_hours", "reflection", "created_at",
+                        "updated_at"]),
+    ("experiences", "experiences", ["id", "youth_id", "task_id", "status", "start_date", "end_date", "feedback",
+                                    "is_verified", "verified_at", "rating", "reference", "created_at",
+                                    "updated_at"]),
+    ("youth_skills", "youth_skills", ["id", "youth_id", "skill_id"]),
+    ("task_skills", "task_skills", ["id", "task_id", "skill_id"]),
+    ("ledger_entries", "ledger_entries", ["id", "entry_sequence", "experience_id", "task_id", "youth_id", "rating",
+                                          "feedback", "reference", "verified_at", "previous_hash", "hash",
+                                          "created_at"]),
+    ("payments", "payments", ["id", "task_id", "youth_id", "total_amount", "platform_fee", "youth_amount",
+                              "status", "paid_at", "reference", "created_at", "updated_at"]),
+    ("wallets", "wallets", ["id", "name", "balance", "currency", "created_at", "updated_at"]),
+    ("wallet_transactions", "wallet_transactions", ["id", "wallet_id", "type", "amount", "balance_after",
+                                                    "reference", "created_at"]),
+]
+
+
+def table_rows(ds):
+    """{table: [row dict keyed by column]} for every seeded table."""
+    skill_ids = {s["slug"]: s["id"] for s in ds["skills"]}
+    join = lambda rows: [{"id": i, **r} for i, r in enumerate(rows, 1)]
+    out = {
+        "users": [{**u, "password": DEMO_PASSWORD_HASH, "is_active": True, "updated_at": u["created_at"]}
+                  for u in ds["users"]],
+        "smes": [{**s, "updated_at": s["created_at"]} for s in ds["smes"]],
+        "youth": [{**y, "skills": ", ".join(display_skill(x) for x in y["skills"])} for y in ds["youth"]],
+        "skills": ds["skills"],
+        "tasks": ds["tasks"],
+        "experiences": ds["experiences"],
+        "youth_skills": join(ds["youth_skills"]),
+        "task_skills": join(ds["task_skills"]),
+        "ledger_entries": [{**e, "entry_sequence": e["sequence"]} for e in ds["ledger_entries"]],
+        "payments": ds["payments"],
+        "wallets": ds["wallets"],
+        "wallet_transactions": ds["wallet_transactions"],
+    }
+    assert set(out) == {t[0] for t in TABLES} and skill_ids
+    return out
 
 
 def to_sql(ds):
-    """Postgres inserts matching the entity column names (snake_case)."""
-    names = lambda skills: ", ".join(display_skill(s) for s in skills)
-    parts = ["-- SSH seed data. Synthetic. Run schema_additions.sql first.",
+    """Postgres inserts for the entity tables, in foreign-key order, in one transaction."""
+    rows = table_rows(ds)
+    parts = ["-- SSH seed data. Synthetic. Load into an EMPTY database whose tables already exist.",
              f"-- Every account's password is {DEMO_PASSWORD}", "BEGIN;"]
-    parts.append(_insert("users", ["id", "name", "email", "password", "role", "is_active", "created_at", "updated_at"],
-                         [[u["id"], u["name"], u["email"], DEMO_PASSWORD_HASH, u["role"], True,
-                           u["created_at"], u["created_at"]] for u in ds["users"]]))
-    parts.append(_insert("smes", ["id", "user_id", "business_name", "registration_number", "industry", "description",
-                                  "employee_count", "bbbee_level", "is_verified", "work_mode", "location",
-                                  "turnover_band", "registration_date", "enterprise_status", "financial_year_end",
-                                  "created_at", "updated_at"],
-                         [[s["id"], s["user_id"], s["business_name"], s["registration_number"], s["industry"],
-                           s["description"], s["employee_count"], s["bbbee_level"], s["is_verified"],
-                           s["work_mode"], s["location"], s["turnover_band"], s["registration_date"],
-                           s["enterprise_status"], s["financial_year_end"], s["created_at"], s["created_at"]]
-                          for s in ds["smes"]]))
-    parts.append(_insert("youth", ["id", "user_id", "education", "skills", "portfolio", "bio", "location",
-                                   "availability", "is_alumni", "alumni_date", "open_to_remote", "max_travel_km",
-                                   "interests", "created_at", "updated_at"],
-                         [[y["id"], y["user_id"], y["education"], names(y["skills"]), y["portfolio"], y["bio"],
-                           y["location"], y["availability"], y["is_alumni"], y["alumni_date"],
-                           y["open_to_remote"], y["max_travel_km"], ", ".join(y["interests"]),
-                           y["created_at"], y["updated_at"]] for y in ds["youth"]]))
-    parts.append(_insert("tasks", ["id", "sme_id", "assigned_to", "title", "description", "category", "status",
-                                   "budget", "duration_days", "is_paid", "required_skills", "work_mode",
-                                   "commitment", "location", "tier", "created_at", "updated_at"],
-                         [[t["id"], t["sme_id"], t["assigned_to"], t["title"], t["description"], t["category"],
-                           t["status"], t["budget"], t["duration_days"], t["is_paid"], names(t["required_skills"]),
-                           t["work_mode"], t["commitment"], t["location"], t["tier"], t["created_at"],
-                           t["updated_at"]] for t in ds["tasks"]]))
-    parts.append(_insert("experiences", ["id", "youth_id", "task_id", "status", "start_date", "end_date",
-                                         "feedback", "is_verified", "verified_at", "rating", "created_at",
-                                         "updated_at"],
-                         [[e["id"], e["youth_id"], e["task_id"], e["status"], e["start_date"], e["end_date"],
-                           e["feedback"], e["is_verified"], e["verified_at"], e["rating"], e["created_at"],
-                           e["updated_at"]] for e in ds["experiences"]]))
-    for t in ["users", "smes", "youth", "tasks", "experiences"]:
-        parts.append(f"SELECT setval(pg_get_serial_sequence('{t}', 'id'), (SELECT MAX(id) FROM {t}));")
+    for key, table, cols in TABLES:
+        parts.append(_insert(table, cols, [[r.get(c) for c in cols] for r in rows[key]]))
+    for _, table, _ in TABLES:
+        parts.append(f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), (SELECT MAX(id) FROM {table}));")
     parts.append("COMMIT;")
     return "\n\n".join(parts) + "\n"
 
@@ -402,7 +560,6 @@ def write_all(out_dir, seed=42):
     out.mkdir(parents=True, exist_ok=True)
     ds = generate(seed)
     (out / "seed_data.json").write_text(json.dumps(ds, indent=2, ensure_ascii=False))
-    (out / "schema_additions.sql").write_text(SCHEMA_ADDITIONS)
     (out / "seed.sql").write_text(to_sql(ds))
     return ds
 

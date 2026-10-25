@@ -4,14 +4,14 @@ import pytest
 
 from ssh_ds import score_match, rank_candidates, build_youth_profile
 from ssh_ds.taxonomy import (ALL_SKILLS, display_skill, parse_skills,
-                             skill_similarity)
+                             skill_similarity, slugify)
 
-TASK = {"required_skills": ["excel", "data_entry"], "category": "Digital Operations",
+TASK = {"required_skills": ["spreadsheet-management", "data-entry"], "category": "Digital Operations",
         "location": "Soweto", "work_mode": "ONSITE", "commitment": "PART_TIME"}
 
 
 def youth(**kw):
-    base = {"id": 1, "skills": ["excel", "data_entry"], "location": "Soweto",
+    base = {"id": 1, "skills": ["spreadsheet-management", "data-entry"], "location": "Soweto",
             "availability": "PART_TIME", "open_to_remote": True, "max_travel_km": 20,
             "interests": ["Digital Operations"], "verified_count": 0}
     base.update(kw)
@@ -20,10 +20,14 @@ def youth(**kw):
 
 # ------------------------------------------------------------------ taxonomy
 def test_skill_similarity_ordering():
-    assert skill_similarity("excel", "excel") == 1.0
-    assert skill_similarity("excel", "bookkeeping") > skill_similarity("excel", "typing") > 0
-    assert skill_similarity("excel", "photography") == 0.0
-    assert skill_similarity("excel", "data_entry") == skill_similarity("data_entry", "excel")
+    sheet = "spreadsheet-management"
+    assert skill_similarity(sheet, sheet) == 1.0
+    related, same_category = skill_similarity(sheet, "basic-bookkeeping"), skill_similarity(sheet, "data-analysis")
+    assert related > same_category > 0
+    assert skill_similarity(sheet, "photography") == 0.0
+    assert skill_similarity(sheet, "data-entry") == skill_similarity("data-entry", sheet)
+    # two soft skills are not "the same field"
+    assert skill_similarity("teamwork", "leadership") == 0.0
 
 
 def test_display_names_round_trip():
@@ -32,8 +36,9 @@ def test_display_names_round_trip():
 
 
 def test_parse_free_text_and_unknowns():
-    assert parse_skills("MS Excel, data entry; WhatsApp, Juggling") == [
-        "excel", "data_entry", "whatsapp_business"]
+    assert parse_skills("MS Excel, data entry; Social Media, Juggling") == [
+        "spreadsheet-management", "data-entry", "social-media-management"]
+    assert parse_skills("Cash-up procedures, cash-up-procedures") == ["cash-up-procedures"]
     assert parse_skills(None) == [] and parse_skills("") == []
 
 
@@ -59,7 +64,7 @@ def test_cold_start_can_score_high():
 
 def test_skills_exact_beats_related_beats_none():
     exact = score_match(youth(), TASK)["score"]
-    related = score_match(youth(skills=["bookkeeping", "typing"]), TASK)["score"]
+    related = score_match(youth(skills=["basic-bookkeeping", "database-entry"]), TASK)["score"]
     none = score_match(youth(skills=["photography"]), TASK)["score"]
     assert exact > related > none
 
@@ -69,6 +74,15 @@ def test_distance_monotonic():
     mid = score_match(youth(location="Johannesburg CBD"), TASK)["score"]
     far = score_match(youth(location="Soshanguve"), TASK)["score"]
     assert near > mid > far
+
+
+def test_remote_flag_is_read_like_work_mode_online():
+    # The backend only has tasks.remote. work_mode, when given, wins over it.
+    base = {k: v for k, v in TASK.items() if k != "work_mode"}
+    far = youth(location="Soshanguve")
+    assert score_match(far, {**base, "remote": True})["components"]["location"] == 1.0
+    assert score_match(far, {**base, "remote": False})["components"]["location"] < 1.0
+    assert score_match(far, {**base, "remote": True, "work_mode": "ONSITE"})["components"]["location"] < 1.0
 
 
 def test_online_task_ignores_distance_but_respects_preference():
@@ -115,7 +129,7 @@ def test_deterministic_and_does_not_mutate():
 def test_reasons_mention_real_signals():
     r = score_match(youth(), TASK)
     text = " ".join(r["reasons"]).lower()
-    assert "excel" in text and "km" in text
+    assert "spreadsheet management" in text and "km" in text
 
 
 def test_rank_candidates_order_and_ties():

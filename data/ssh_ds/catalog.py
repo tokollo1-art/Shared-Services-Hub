@@ -50,64 +50,65 @@ SME_SEED = [
      ["Marketing & Creative", "Customer Support", "Retail & Sales"], "ONSITE", "Orange Farm", 5, "Level 1"),
 ]
 
-# Task templates per category: (title, detail, required skills, tiers it suits)
+# Task templates per category: (title, detail, required skill slugs, task tiers it suits).
+# Tier 3 tasks reuse the tier 2 templates (see seed._template_level).
 TASK_TEMPLATES = {
     "Digital Operations": [
-        ("Capture customer records into a spreadsheet", "Type 150 handwritten customer cards into a clean Excel sheet.", ["data_entry", "typing", "excel"], (0,)),
-        ("Organise a shared Google Drive", "Sort scanned documents into a clear folder structure.", ["filing", "google_workspace"], (0, 1)),
-        ("Clean up a supplier contact list", "Remove duplicates and fix formatting in a supplier list.", ["data_entry", "excel"], (0, 1)),
-        ("Set up a weekly booking schedule", "Build a shared calendar and booking sheet for staff.", ["scheduling", "google_workspace", "email_admin"], (1, 2)),
-        ("Build a monthly reporting spreadsheet", "Create a sales summary with formulas and charts.", ["excel", "data_entry"], (2,)),
+        ("Capture customer records into a spreadsheet", "Type 150 handwritten customer cards into a clean Excel sheet.", ["data-entry", "database-entry", "spreadsheet-management"], (0,)),
+        ("Organise a shared Google Drive", "Sort scanned documents into a clear folder structure.", ["digital-filing", "cloud-file-management"], (0, 1)),
+        ("Clean up a supplier contact list", "Remove duplicates and fix formatting in a supplier list.", ["data-cleaning", "spreadsheet-management"], (0, 1)),
+        ("Set up a weekly booking schedule", "Build a shared calendar and booking sheet for staff.", ["scheduling", "calendar-management", "email-correspondence"], (1, 2)),
+        ("Build a monthly reporting spreadsheet", "Create a sales summary with formulas and charts.", ["spreadsheet-management", "data-visualisation"], (2,)),
     ],
     "Marketing & Creative": [
-        ("Design five Instagram posts for a promotion", "Create branded posts in Canva for an upcoming promotion.", ["canva", "social_media", "graphic_design"], (0, 1)),
+        ("Design five Instagram posts for a promotion", "Create branded posts in Canva for an upcoming promotion.", ["graphic-design", "social-media-management"], (0, 1)),
         ("Take product photos for the catalogue", "Photograph 25 products on a clean background.", ["photography"], (0, 1)),
-        ("Write product descriptions for 20 items", "Write short, clear descriptions for the online shop.", ["copywriting"], (0, 1)),
-        ("Edit a 60-second promo video", "Cut and caption a short promo clip for social media.", ["video_editing", "social_media"], (1, 2)),
-        ("Plan a month of social media content", "Plan and schedule a month of posts across two platforms.", ["social_media", "copywriting", "canva"], (2,)),
+        ("Write product descriptions for 20 items", "Write short, clear descriptions for the online shop.", ["copywriting", "content-writing"], (0, 1)),
+        ("Edit a 60-second promo video", "Cut and caption a short promo clip for social media.", ["video-editing", "social-media-management"], (1, 2)),
+        ("Plan a month of social media content", "Plan and schedule a month of posts across two platforms.", ["social-media-management", "copywriting", "digital-marketing"], (2,)),
     ],
     "Accounting & Finance": [
-        ("Capture a month of receipts", "Capture receipts into the bookkeeping spreadsheet.", ["data_entry", "bookkeeping"], (0, 1)),
-        ("Prepare customer invoices", "Prepare and send this month's customer invoices.", ["invoicing", "excel"], (0, 1)),
-        ("Reconcile the petty cash book", "Match petty cash slips to the cash book and flag gaps.", ["cash_handling", "bookkeeping"], (1,)),
-        ("Update VAT records for the quarter", "Sort invoices and update VAT records for the quarter.", ["vat_basics", "bookkeeping", "excel"], (2,)),
-        ("Prepare a monthly payroll summary", "Compile hours and payments into a payroll summary.", ["payroll_basics", "excel"], (2,)),
+        ("Capture a month of receipts", "Capture receipts into the bookkeeping spreadsheet.", ["expense-recording", "basic-bookkeeping"], (0, 1)),
+        ("Prepare customer invoices", "Prepare and send this month's customer invoices.", ["invoice-processing", "spreadsheet-management"], (0, 1)),
+        ("Reconcile the petty cash book", "Match petty cash slips to the cash book and flag gaps.", ["petty-cash-handling", "basic-bookkeeping"], (1,)),
+        ("Update VAT records for the quarter", "Sort invoices and update VAT records for the quarter.", ["basic-bookkeeping", "invoice-processing", "spreadsheet-management"], (2,)),
+        ("Prepare a monthly payroll summary", "Compile hours and payments into a payroll summary.", ["budget-tracking", "spreadsheet-management"], (2,)),
     ],
     "Customer Support": [
-        ("Answer customer WhatsApp enquiries for a week", "Reply to customer messages using quick replies.", ["whatsapp_business", "customer_service"], (0, 1)),
-        ("Call 40 customers for a satisfaction survey", "Phone customers and record their feedback.", ["call_handling", "customer_service"], (0, 1)),
-        ("Run the front desk on a busy weekend", "Greet customers, answer questions and take payments.", ["customer_service", "cash_handling"], (0, 1)),
-        ("Handle complaints and log resolutions", "Respond to complaints and keep a resolution log.", ["complaint_handling", "customer_service"], (1, 2)),
-        ("Set up a WhatsApp Business catalogue", "Create a product catalogue and quick replies.", ["whatsapp_business", "customer_service"], (1, 2)),
+        ("Answer customer WhatsApp enquiries for a week", "Reply to customer messages using quick replies.", ["customer-service", "communication"], (0, 1)),
+        ("Call 40 customers for a satisfaction survey", "Phone customers and record their feedback.", ["phone-etiquette", "customer-feedback-collection"], (0, 1)),
+        ("Run the front desk on a busy weekend", "Greet customers, answer questions and take payments.", ["customer-service", "cash-handling"], (0, 1)),
+        ("Handle complaints and log resolutions", "Respond to complaints and keep a resolution log.", ["complaint-handling", "customer-service"], (1, 2)),
+        ("Set up a WhatsApp Business catalogue", "Create a product catalogue and quick replies.", ["community-management", "customer-service"], (1, 2)),
     ],
     "IT & Technical": [
-        ("Set up email accounts for staff", "Create email accounts and shared drives for the team.", ["google_workspace", "troubleshooting"], (0, 1)),
-        ("Phone and laptop troubleshooting day", "Fix common problems on staff phones and laptops.", ["troubleshooting", "mobile_support"], (0, 1)),
-        ("Build a one-page business website", "Build and publish a simple one-page site.", ["html_css", "web_basics"], (1, 2)),
-        ("Clean up and reinstall five office computers", "Back up, wipe and reinstall five computers.", ["hardware_support", "troubleshooting"], (1,)),
-        ("Set up office Wi-Fi and a shared printer", "Install and secure the network and printer.", ["networking_basics", "hardware_support"], (2,)),
-        ("Write a script to tidy a CSV of orders", "Clean and summarise a monthly orders file.", ["python_basics", "excel"], (2,)),
+        ("Set up email accounts for staff", "Create email accounts and shared drives for the team.", ["digital-literacy", "cloud-file-management"], (0, 1)),
+        ("Phone and laptop troubleshooting day", "Fix common problems on staff phones and laptops.", ["problem-solving", "basic-repairs"], (0, 1)),
+        ("Build a one-page business website", "Build and publish a simple one-page site.", ["website-management", "basic-coding"], (1, 2)),
+        ("Clean up and reinstall five office computers", "Back up, wipe and reinstall five computers.", ["basic-repairs", "problem-solving"], (1,)),
+        ("Set up office Wi-Fi and a shared printer", "Install and secure the network and printer.", ["office-equipment-operation", "online-security-basics"], (2,)),
+        ("Write a script to tidy a CSV of orders", "Clean and summarise a monthly orders file.", ["basic-coding", "data-cleaning"], (2,)),
     ],
     "Retail & Sales": [
-        ("Count and label stock", "Count shelf stock and label items by section.", ["inventory", "packing"], (0,)),
-        ("Arrange the shop floor display", "Set up a clear, attractive display for the weekend.", ["merchandising"], (0, 1)),
-        ("Run a weekend market stall", "Sell at a stall and handle cash.", ["sales", "cash_handling", "customer_service"], (0, 1)),
-        ("Do a full stock take and reconcile", "Reconcile physical stock against the stock sheet.", ["inventory", "excel"], (1, 2)),
-        ("Follow up leads and close ten sales", "Follow up warm leads over WhatsApp and phone.", ["sales", "whatsapp_business"], (2,)),
+        ("Count and label stock", "Count shelf stock and label items by section.", ["stock-taking", "inventory-coordination"], (0,)),
+        ("Arrange the shop floor display", "Set up a clear, attractive display for the weekend.", ["visual-merchandising"], (0, 1)),
+        ("Run a weekend market stall", "Sell at a stall and handle cash.", ["sales-support", "cash-handling", "customer-service"], (0, 1)),
+        ("Do a full stock take and reconcile", "Reconcile physical stock against the stock sheet.", ["stock-taking", "spreadsheet-management"], (1, 2)),
+        ("Follow up leads and close ten sales", "Follow up warm leads over WhatsApp and phone.", ["sales-support", "customer-relationship-management"], (2,)),
     ],
     "Education & Training": [
-        ("Help Grade 8 learners with maths homework", "Support a small group with weekly maths homework.", ["tutoring", "mathematics"], (0, 1)),
-        ("Run an after-school reading hour", "Lead a reading hour for primary school learners.", ["tutoring", "english", "childcare"], (0, 1)),
-        ("Mark and capture test results", "Mark short tests and capture results.", ["data_entry", "mathematics"], (0,)),
-        ("Prepare weekly lesson worksheets", "Prepare clear worksheets for next week's lessons.", ["english", "mathematics", "canva"], (1, 2)),
-        ("Lead a Grade 11 maths revision camp", "Run a two-day revision camp before exams.", ["tutoring", "mathematics"], (2,)),
+        ("Help Grade 8 learners with maths homework", "Support a small group with weekly maths homework.", ["mentoring", "problem-solving"], (0, 1)),
+        ("Run an after-school reading hour", "Lead a reading hour for primary school learners.", ["mentoring", "communication"], (0, 1)),
+        ("Mark and capture test results", "Mark short tests and capture results.", ["data-entry", "attention-to-detail"], (0,)),
+        ("Prepare weekly lesson worksheets", "Prepare clear worksheets for next week's lessons.", ["document-drafting", "template-formatting"], (1, 2)),
+        ("Lead a Grade 11 maths revision camp", "Run a two-day revision camp before exams.", ["mentoring", "presentation-skills"], (2,)),
     ],
     "Logistics & Events": [
-        ("Deliver parcels around the township", "Deliver a day's parcels on a planned route.", ["delivery", "time_management"], (0, 1)),
-        ("Pack and label 100 customer orders", "Pack, label and stage orders for collection.", ["packing", "inventory"], (0,)),
-        ("Set up and serve at a community event", "Help set up, serve food and pack down.", ["event_support", "food_service"], (0, 1)),
-        ("Coordinate a small product launch day", "Coordinate suppliers, guests and timing on the day.", ["event_support", "time_management", "customer_service"], (1, 2)),
-        ("Plan weekly delivery routes", "Plan efficient routes and track deliveries in a sheet.", ["delivery", "time_management", "excel"], (2,)),
+        ("Deliver parcels around the township", "Deliver a day's parcels on a planned route.", ["delivery-coordination", "time-management"], (0, 1)),
+        ("Pack and label 100 customer orders", "Pack, label and stage orders for collection.", ["packaging", "order-fulfilment"], (0,)),
+        ("Set up and serve at a community event", "Help set up, serve food and pack down.", ["event-coordination", "food-preparation"], (0, 1)),
+        ("Coordinate a small product launch day", "Coordinate suppliers, guests and timing on the day.", ["event-coordination", "stakeholder-communication"], (1, 2)),
+        ("Plan weekly delivery routes", "Plan efficient routes and track deliveries in a sheet.", ["logistics-coordination", "spreadsheet-management"], (2,)),
     ],
 }
 
@@ -169,3 +170,13 @@ FUNDERS = [
     ("Rand Horizon Foundation", 250000.0, "First Experience Initiative"),
     ("Ubuntu Skills Trust", 150000.0, "Township Digital Skills cohort"),
 ]
+
+
+# Skills used by each task category's templates. Youth in a category get their
+# skills from this pool, and a skill points back to the categories it appears in.
+CATEGORY_SKILLS = {cat: sorted({sk for t in tmpls for sk in t[2]})
+                   for cat, tmpls in TASK_TEMPLATES.items()}
+SKILL_TASK_CATEGORIES = {}
+for _cat, _skills in CATEGORY_SKILLS.items():
+    for _sk in _skills:
+        SKILL_TASK_CATEGORIES.setdefault(_sk, set()).add(_cat)
